@@ -460,7 +460,7 @@ export default function ProgressPage() {
                   <div className="flex items-start gap-3">
                     <Zap className="w-6 h-6 shrink-0 mt-0.5" />
                     <div>
-                      <div className="font-semibold text-lg mb-1">Today's AI Tip</div>
+                      <div className="font-semibold text-lg mb-1">Today&apos;s AI Tip</div>
                       <p className="opacity-90 leading-relaxed">{insights.studyTip}</p>
                     </div>
                   </div>
@@ -487,7 +487,7 @@ export default function ProgressPage() {
           ) : (
             <div className="text-center py-16 text-slate-400">
               <Brain className="w-12 h-12 mx-auto mb-3 opacity-30" />
-              <p>Click "AI Insights" to generate your personal report</p>
+              <p>Click &quot;AI Insights&quot; to generate your personal report</p>
               <button onClick={fetchAIInsights} className="mt-4 px-6 py-3 rounded-xl bg-gradient-to-r from-primary-600 to-accent-500 text-white font-medium hover:shadow-lg transition-all inline-flex items-center gap-2">
                 <Sparkles className="w-4 h-4" /> Generate Now
               </button>

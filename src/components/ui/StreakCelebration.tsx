@@ -50,7 +50,7 @@ export function StreakCelebration({ streak, onDismiss }: StreakCelebrationProps)
         {isMilestone && (
           <div className="bg-white/20 rounded-2xl px-4 py-3 mb-4 backdrop-blur-sm">
             <p className="font-bold text-sm">🎉 Milestone Reached!</p>
-            <p className="text-white/80 text-xs mt-0.5">You've unlocked a new badge</p>
+            <p className="text-white/80 text-xs mt-0.5">You&apos;ve unlocked a new badge</p>
           </div>
         )}
 

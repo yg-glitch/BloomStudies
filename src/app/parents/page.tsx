@@ -124,7 +124,7 @@ export default function ParentsPage() {
                 </span>
               </h1>
               <p className="text-xl text-slate-600 dark:text-slate-300 leading-relaxed mb-8 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
-                Bloom Studies is Ireland's AI-powered learning platform built specifically for <strong className="text-slate-900 dark:text-white">Junior Cycle</strong> and <strong className="text-slate-900 dark:text-white">Leaving Certificate</strong> students. Like having a private tutor, exam grader, and study coach — available 24/7 for less than the price of one grinds session.
+                Bloom Studies is Ireland&apos;s AI-powered learning platform built specifically for <strong className="text-slate-900 dark:text-white">Junior Cycle</strong> and <strong className="text-slate-900 dark:text-white">Leaving Certificate</strong> students. Like having a private tutor, exam grader, and study coach — available 24/7 for less than the price of one grinds session.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
                 <Link href="/auth/signup" className="group flex items-center justify-center gap-3 px-8 py-4 rounded-2xl bg-gradient-to-r from-primary-600 to-accent-500 text-white font-bold text-lg hover:shadow-2xl hover:shadow-primary-500/25 hover:scale-[1.02] transition-all">
@@ -258,7 +258,7 @@ export default function ParentsPage() {
                 Know exactly how<br />
                 <span className="bg-gradient-to-r from-primary-500 to-accent-500 bg-clip-text text-transparent">your child is doing.</span>
               </h2>
-              <p className="text-lg text-slate-600 dark:text-slate-400 mb-8 leading-relaxed">Bloom's analytics dashboard shows study hours, subject performance, quiz scores, and consistency over time. AI predicts CAO points based on current progress — giving your family a realistic, data-driven view of exam readiness.</p>
+              <p className="text-lg text-slate-600 dark:text-slate-400 mb-8 leading-relaxed">Bloom&apos;s analytics dashboard shows study hours, subject performance, quiz scores, and consistency over time. AI predicts CAO points based on current progress — giving your family a realistic, data-driven view of exam readiness.</p>
               <div className="space-y-4">
                 {[
                   { icon: TrendingUp, label: 'Subject-by-subject performance tracking', color: 'text-violet-500' },
@@ -277,14 +277,14 @@ export default function ParentsPage() {
               </div>
               {/* Future-proof notice */}
               <div className="mt-6 p-4 rounded-xl border border-dashed border-primary-300 dark:border-primary-700 bg-primary-50/50 dark:bg-primary-950/20">
-                <p className="text-sm text-primary-700 dark:text-primary-400"><strong>Coming soon:</strong> Parent accounts with weekly progress reports, subject alerts, and shared analytics — so you can stay involved without hovering. Your child's privacy and independence remain protected.</p>
+                <p className="text-sm text-primary-700 dark:text-primary-400"><strong>Coming soon:</strong> Parent accounts with weekly progress reports, subject alerts, and shared analytics — so you can stay involved without hovering. Your child&apos;s privacy and independence remain protected.</p>
               </div>
             </div>
             {/* Visual */}
             <div className="relative">
               <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-2xl shadow-primary-500/5">
                 <div className="flex items-center justify-between mb-5">
-                  <h3 className="font-display font-bold text-slate-900 dark:text-white">Your Child's Progress</h3>
+                  <h3 className="font-display font-bold text-slate-900 dark:text-white">Your Child&apos;s Progress</h3>
                   <span className="text-xs px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 font-medium">↑ Improving</span>
                 </div>
                 <div className="space-y-4">
@@ -359,7 +359,7 @@ export default function ParentsPage() {
             {TESTIMONIALS.map((t, i) => (
               <div key={i} className="p-6 rounded-2xl bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 hover:shadow-xl hover:border-primary-300 dark:hover:border-primary-700 transition-all">
                 <div className="flex gap-1 mb-4">{[...Array(t.rating)].map((_,j)=><Star key={j} className="w-4 h-4 fill-amber-400 text-amber-400" />)}</div>
-                <p className="text-slate-700 dark:text-slate-300 text-sm leading-relaxed mb-5 italic">"{t.quote}"</p>
+                <p className="text-slate-700 dark:text-slate-300 text-sm leading-relaxed mb-5 italic">&quot;{t.quote}&quot;</p>
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-lg">{t.avatar}</div>
                   <div>
@@ -453,7 +453,7 @@ export default function ParentsPage() {
             Give your child the best<br />possible start.
           </h2>
           <p className="text-xl text-white/80 mb-8 max-w-2xl mx-auto leading-relaxed">
-            Bloom Studies is Ireland's most comprehensive AI study platform — designed for Junior Cycle and Leaving Certificate students. Start free today. No credit card required.
+            Bloom Studies is Ireland&apos;s most comprehensive AI study platform — designed for Junior Cycle and Leaving Certificate students. Start free today. No credit card required.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/auth/signup" className="group flex items-center justify-center gap-3 px-10 py-5 rounded-2xl bg-white text-primary-700 font-black text-lg hover:shadow-2xl hover:scale-[1.02] transition-all">

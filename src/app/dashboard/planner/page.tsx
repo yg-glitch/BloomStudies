@@ -234,7 +234,7 @@ export default function StudyPlannerPage() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="p-4 rounded-xl card text-center">
               <div className="text-2xl font-display font-bold text-gradient">{completedToday}/{totalToday}</div>
-              <div className="text-xs text-slate-500 mt-1">Today's Sessions</div>
+              <div className="text-xs text-slate-500 mt-1">Today&apos;s Sessions</div>
             </div>
             <div className="p-4 rounded-xl card text-center">
               <div className="text-2xl font-display font-bold text-gradient">{plan.weeklyHours}h</div>
@@ -424,7 +424,7 @@ export default function StudyPlannerPage() {
               <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
               <div className="flex-1">
                 <p className="font-medium text-amber-800 dark:text-amber-300 text-sm">You have {missedSessions} missed sessions</p>
-                <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">Use the "Reschedule" button to automatically move them to upcoming days.</p>
+                <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">Use the &quot;Reschedule&quot; button to automatically move them to upcoming days.</p>
               </div>
               <button onClick={reschedule} className="px-3 py-1.5 rounded-lg bg-amber-500 text-white text-xs font-medium hover:bg-amber-600 transition-colors shrink-0">Reschedule</button>
             </div>

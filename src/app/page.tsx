@@ -6,7 +6,7 @@ import { useState, useRef, useEffect } from 'react'
 import {
   ArrowRight, Sparkles, Brain, Layers, FileCheck, Headphones, Calendar,
   Star, Check, ChevronDown, Menu, X, Play,
-  Zap, Shield, Globe
+  Zap, Shield, Globe, BookOpen
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -137,7 +137,7 @@ export default function LandingPage() {
             {/* Badge */}
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary-50 dark:bg-primary-950/50 border border-primary-200 dark:border-primary-800 text-primary-700 dark:text-primary-300 text-sm font-medium mb-8 animate-fade-in">
               <Sparkles className="w-4 h-4" />
-              Ireland's #1 AI Study Platform for State Exams
+              Ireland&apos;s #1 AI Study Platform for State Exams
               <span className="ml-1 px-2 py-0.5 rounded-full bg-primary-500 text-white text-xs">New</span>
             </div>
 
@@ -269,7 +269,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12">
             <h2 className="font-display text-4xl sm:text-5xl font-black text-slate-900 dark:text-white mb-4">Built for everyone in education</h2>
-            <p className="text-xl text-slate-600 dark:text-slate-400">Whether you're a student, teacher, parent, or school — Bloom works for you.</p>
+            <p className="text-xl text-slate-600 dark:text-slate-400">Whether you&apos;re a student, teacher, parent, or school — Bloom works for you.</p>
           </div>
           <div className="flex gap-3 justify-center mb-10 flex-wrap">
             {['students', 'teachers', 'parents', 'schools'].map(s => (
@@ -293,7 +293,7 @@ export default function LandingPage() {
               {activeSection === 'teachers' && (
                 <div className="space-y-5 animate-fade-in">
                   <h3 className="font-display text-3xl font-bold text-slate-900 dark:text-white">Empower your students</h3>
-                  <p className="text-lg text-slate-600 dark:text-slate-400">Bloom gives teachers powerful tools to extend learning beyond the classroom and track every student's progress in real time.</p>
+                  <p className="text-lg text-slate-600 dark:text-slate-400">Bloom gives teachers powerful tools to extend learning beyond the classroom and track every student&apos;s progress in real time.</p>
                   {['Class analytics dashboard to identify struggling students', 'Assign AI-generated quizzes and flashcard sets', 'Track study hours, scores, and engagement', 'Curriculum-aligned content for every subject', 'Easy to set up — no technical knowledge needed'].map((item, i) => (
                     <div key={i} className="flex items-start gap-3"><div className="w-5 h-5 rounded-full bg-primary-500 flex items-center justify-center shrink-0 mt-0.5"><Check className="w-3 h-3 text-white" /></div><span className="text-slate-700 dark:text-slate-300">{item}</span></div>
                   ))}
@@ -310,7 +310,7 @@ export default function LandingPage() {
               )}
               {activeSection === 'schools' && (
                 <div className="space-y-5 animate-fade-in">
-                  <h3 className="font-display text-3xl font-bold text-slate-900 dark:text-white">Transform your school's results</h3>
+                  <h3 className="font-display text-3xl font-bold text-slate-900 dark:text-white">Transform your school&apos;s results</h3>
                   <p className="text-lg text-slate-600 dark:text-slate-400">School-wide access to Bloom creates a culture of consistent, effective revision that measurably improves CAO points and state exam results.</p>
                   {['School-wide dashboard with all student data', 'Discounted bulk pricing for whole-school rollout', 'Teacher training and onboarding included', 'Custom school branding available', 'Dedicated account manager and support'].map((item, i) => (
                     <div key={i} className="flex items-start gap-3"><div className="w-5 h-5 rounded-full bg-primary-500 flex items-center justify-center shrink-0 mt-0.5"><Check className="w-3 h-3 text-white" /></div><span className="text-slate-700 dark:text-slate-300">{item}</span></div>
@@ -360,7 +360,7 @@ export default function LandingPage() {
                 <div className="flex items-center gap-1 mb-4">
                   {[...Array(5)].map((_, j) => <Star key={j} className="w-4 h-4 fill-amber-400 text-amber-400" />)}
                 </div>
-                <p className="text-slate-700 dark:text-slate-300 leading-relaxed mb-5 italic">"{t.text}"</p>
+                <p className="text-slate-700 dark:text-slate-300 leading-relaxed mb-5 italic">&quot;{t.text}&quot;</p>
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-lg">{t.avatar}</div>
                   <div>
@@ -447,7 +447,7 @@ export default function LandingPage() {
             Your best results start here.
           </h2>
           <p className="text-xl text-white/80 mb-10 max-w-2xl mx-auto">
-            Join 15,000+ Irish students already using Bloom to study smarter and achieve grades they're proud of.
+            Join 15,000+ Irish students already using Bloom to study smarter and achieve grades they&apos;re proud of.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/auth/signup" className="group flex items-center justify-center gap-3 px-10 py-5 rounded-2xl bg-white text-primary-700 font-black text-lg hover:shadow-2xl hover:scale-[1.02] transition-all">
@@ -470,7 +470,7 @@ export default function LandingPage() {
                 <Image src="/logo.png" alt="Bloom" width={36} height={36} className="rounded-xl" />
                 <span className="font-display font-bold text-xl text-white">Bloom Studies</span>
               </div>
-              <p className="text-sm leading-relaxed mb-4">Ireland's AI-powered learning platform for Junior Cycle and Leaving Certificate students.</p>
+              <p className="text-sm leading-relaxed mb-4">Ireland&apos;s AI-powered learning platform for Junior Cycle and Leaving Certificate students.</p>
               <div className="flex items-center gap-1">{[...Array(5)].map((_, i)=><Star key={i} className="w-4 h-4 fill-amber-400 text-amber-400"/>)}<span className="text-xs ml-1">4.9/5 from 2,000+ reviews</span></div>
             </div>
             {[

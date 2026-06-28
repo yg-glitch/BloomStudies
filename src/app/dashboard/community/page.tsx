@@ -237,7 +237,7 @@ export default function CommunityPage() {
                 <div key={e.rank} className={cn('flex items-center gap-4 p-4 rounded-2xl border', e.isYou ? 'border-primary-400 bg-primary-50 dark:bg-primary-950/20' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800')}>
                   <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center font-display font-bold text-sm shrink-0', e.rank===1?'bg-amber-400 text-white':e.rank===2?'bg-slate-300 text-slate-700':e.rank===3?'bg-amber-600 text-white':'bg-slate-100 dark:bg-slate-700 text-slate-500')}>{e.rank}</div>
                   <span className="text-2xl">{e.avatar}</span>
-                  <div className="flex-1"><div className="font-semibold text-slate-900 dark:text-white text-sm">{e.name}{e.isYou&&<span className="text-xs text-primary-500 ml-1">(you)</span>}</div><div className={cn('text-xs', LEVEL_COLORS[e.level as any])}>{e.level}</div></div>
+                  <div className="flex-1"><div className="font-semibold text-slate-900 dark:text-white text-sm">{e.name}{e.isYou&&<span className="text-xs text-primary-500 ml-1">(you)</span>}</div><div className={cn('text-xs', LEVEL_COLORS[e.level as keyof typeof LEVEL_COLORS])}>{e.level}</div></div>
                   <div className="text-right"><div className="font-display font-bold text-slate-900 dark:text-white">{e.xp.toLocaleString()}</div><div className="text-xs text-slate-400">XP</div></div>
                   <span className="text-xl">{e.badge}</span>
                 </div>

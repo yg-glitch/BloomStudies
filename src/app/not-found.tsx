@@ -23,7 +23,7 @@ export default function NotFound() {
 
         <h1 className="font-display text-2xl font-bold text-white mb-3">Page not found</h1>
         <p className="text-slate-400 text-sm mb-8 leading-relaxed max-w-xs mx-auto">
-          Looks like this page bloomed away. Let's get you back on track for your exams.
+          Looks like this page bloomed away. Let&apos;s get you back on track for your exams.
         </p>
 
         <div className="flex flex-col sm:flex-row gap-3 justify-center">

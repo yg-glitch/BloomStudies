@@ -18,7 +18,7 @@ export default function Error({ error, reset }: { error: Error & { digest?: stri
         </div>
         <h1 className="font-display text-2xl font-bold text-white mb-2">Something went wrong</h1>
         <p className="text-slate-400 text-sm mb-2 leading-relaxed">
-          An unexpected error occurred. Don't worry — your study data is safe.
+          An unexpected error occurred. Don&apos;t worry — your study data is safe.
         </p>
         {error.digest && (
           <p className="text-slate-600 text-xs mb-6 font-mono">Error ID: {error.digest}</p>

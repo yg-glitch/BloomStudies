@@ -12,6 +12,7 @@ import {
 import { cn } from '@/lib/utils'
 import { useState, useEffect } from 'react'
 import { useTheme } from '@/components/ThemeProvider'
+import UpgradePrompt from '@/components/ui/UpgradePrompt'
 
 const NAV_GROUPS = [
   {
@@ -180,7 +181,7 @@ export default function Sidebar() {
         <div className="shrink-0 border-t border-slate-200 dark:border-slate-800 p-2 space-y-0.5">
           {/* Upgrade prompt — free users only */}
           {!isCollapsed && (
-            <UpgradeSection />
+            <UpgradePrompt feature="Premium Features" description="Unlock unlimited AI access" inline />
           )}
 
           <Link

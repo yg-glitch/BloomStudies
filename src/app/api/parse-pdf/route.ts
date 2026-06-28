@@ -17,6 +17,7 @@ export async function POST(req: NextRequest) {
     const buffer = Buffer.from(arrayBuffer)
 
     // Dynamic import to avoid build issues with pdf-parse
+    // @ts-ignore - pdf-parse doesn't have proper TypeScript definitions
     const pdfParse = (await import('pdf-parse')).default
     const data = await pdfParse(buffer)
 

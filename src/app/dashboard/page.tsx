@@ -102,7 +102,7 @@ export default function Dashboard() {
             {greeting}, Student 👋
           </h1>
           <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm sm:text-base">
-            You're on a <strong className="text-orange-500">12-day streak</strong> — keep the momentum going!
+            You&apos;re on a <strong className="text-orange-500">12-day streak</strong> — keep the momentum going!
           </p>
         </div>
         <Link href="/dashboard/planner" className="btn-secondary text-sm shrink-0">

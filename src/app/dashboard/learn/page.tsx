@@ -178,7 +178,7 @@ export default function BloomLearnPage() {
                 <div className="mb-5 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 max-h-48 overflow-y-auto">
                   <h4 className="font-semibold text-slate-900 dark:text-white text-sm mb-3 flex items-center gap-2"><MessageSquare className="w-4 h-4 text-primary-500" /> Transcript</h4>
                   <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed italic">
-                    Welcome to {activeResource.title}. In this {CONTENT_TYPE_INFO[activeResource.type].label.toLowerCase()}, we'll explore {activeResource.description.toLowerCase()}. This content is specifically designed for {activeResource.level} students preparing for Irish state exams...
+                    Welcome to {activeResource.title}. In this {CONTENT_TYPE_INFO[activeResource.type].label.toLowerCase()}, we&apos;ll explore {activeResource.description.toLowerCase()}. This content is specifically designed for {activeResource.level} students preparing for Irish state exams...
                     <br /><br />
                     [Full transcript available — click on any paragraph to jump to that point in the video.]
                   </p>

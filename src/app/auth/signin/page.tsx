@@ -37,7 +37,7 @@ export default function SignIn() {
         </div>
         <div className="relative space-y-6">
           <h2 className="font-display text-4xl font-black text-white leading-tight">
-            Ireland's smartest<br />study platform.
+Ireland&apos;s smartest<br />study platform.
           </h2>
           <p className="text-white/80 text-lg leading-relaxed">
             AI-powered tools built for Junior Cycle and Leaving Certificate students. Study smarter, score higher.
@@ -61,7 +61,7 @@ export default function SignIn() {
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-lg shrink-0">👩‍🎓</div>
               <div>
-                <p className="text-white text-sm leading-relaxed italic">"Got H1 in my English mock after 2 weeks of using Bloom. The AI tutor is incredible."</p>
+                <p className="text-white text-sm leading-relaxed italic">&quot;Got H1 in my English mock after 2 weeks of using Bloom. The AI tutor is incredible.&quot;</p>
                 <p className="text-white/60 text-xs mt-2">Aoife Murphy · Leaving Cert 2025</p>
               </div>
             </div>
@@ -193,7 +193,7 @@ export default function SignIn() {
           </div>
 
           <p className="text-center text-slate-500 dark:text-slate-500 text-sm mt-8">
-            Don't have an account?{' '}
+            Don&apos;t have an account?{' '}
             <Link href="/auth/signup" className="text-primary-400 font-semibold hover:text-primary-300 transition-colors">
               Create one free
             </Link>

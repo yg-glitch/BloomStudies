@@ -79,8 +79,8 @@ export default function SignUp() {
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-lg shrink-0">👨‍💻</div>
             <div>
-              <p className="text-white text-sm leading-relaxed italic">"The exam grader is unbelievable. My English went from H3 to H1 in a month."</p>
-              <p className="text-white/60 text-xs mt-2">Ciarán O'Brien · Leaving Cert</p>
+              <p className="text-white text-sm leading-relaxed italic">&quot;The exam grader is unbelievable. My English went from H3 to H1 in a month.&quot;</p>
+              <p className="text-white/60 text-xs mt-2">Ciarán O&apos;Brien · Leaving Cert</p>
             </div>
           </div>
         </div>
