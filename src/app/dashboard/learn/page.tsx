@@ -11,7 +11,6 @@ import {
 import { cn } from '@/lib/utils'
 import { useLocalStorage } from '@/lib/useLocalStorage'
 import MarkdownRenderer from '@/components/ui/MarkdownRenderer'
-import { useState, useEffect } from 'react'
 import {
   LearnResource, Creator, ContentType, ContentCategory,
   CONTENT_TYPE_INFO, THUMBNAIL_GRADIENTS, generateMockResources
