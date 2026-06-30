@@ -403,7 +403,7 @@ export default function ParentsPage() {
               </div>
               <div className="text-white/70 text-sm mb-6">Less than one grinds hour</div>
               <ul className="space-y-3 mb-8">
-                {['Unlimited AI Tutor messages', 'Unlimited exam grading', 'Unlimited flashcard decks', 'AI Notes with PDF export', 'Audio podcast learning', 'Full analytics dashboard', 'Exam grade predictions', 'Priority AI responses', 'Community + Bloom Learn'].map((f,i)=>(
+                {['Unlimited AI Tutor messages', 'Unlimited exam grading', 'Unlimited flashcard decks', 'AI Notes with PDF export', 'Audio podcast learning', 'Full analytics dashboard', 'Exam grade predictions', 'Priority AI responses', 'Community + Academy'].map((f,i)=>(
                   <li key={i} className="flex items-center gap-2.5 text-sm text-white/90"><div className="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center shrink-0"><Check className="w-2.5 h-2.5 text-white" /></div>{f}</li>
                 ))}
               </ul>

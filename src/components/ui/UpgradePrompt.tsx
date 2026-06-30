@@ -1,6 +1,6 @@
 'use client'
 
-import { Sparkles, Lock, ArrowRight, X } from 'lucide-react'
+import { Sparkles, ArrowRight, X } from 'lucide-react'
 import { useSubscription } from '@/components/SubscriptionProvider'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
@@ -32,19 +32,23 @@ export default function UpgradePrompt({ feature, description, inline = false, on
 
   if (inline) {
     return (
-      <div className="flex items-center gap-3 p-4 rounded-xl bg-gradient-to-r from-primary-50 to-accent-50 dark:from-primary-950/30 dark:to-accent-950/30 border border-primary-200 dark:border-primary-800">
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center shrink-0">
-          <Lock className="w-4 h-4 text-white" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-slate-900 dark:text-white">{feature} — Premium only</p>
-          {description && <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{description}</p>}
+      <div className="p-3.5 rounded-xl bg-gradient-to-br from-primary-50 to-accent-50 dark:from-primary-950/40 dark:to-accent-950/40 border border-primary-200 dark:border-primary-800/60">
+        <div className="flex items-center gap-2.5 mb-2.5">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center shrink-0">
+            <Sparkles className="w-4 h-4 text-white" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-slate-900 dark:text-white leading-tight">{feature}</p>
+            {description && <p className="text-xs text-slate-500 dark:text-slate-400 leading-tight mt-0.5">{description}</p>}
+          </div>
         </div>
         <button onClick={handleUpgrade} disabled={isLoading}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-primary-600 to-accent-500 text-white text-sm font-semibold hover:shadow-lg transition-all shrink-0 disabled:opacity-50">
-          <Sparkles className="w-3.5 h-3.5" />
-          Upgrade
+          className="w-full flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-gradient-to-r from-primary-600 to-accent-500 text-white text-sm font-semibold hover:shadow-lg hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-50">
+          {isLoading
+            ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Processing…</>
+            : <><Sparkles className="w-3.5 h-3.5" />Upgrade to Premium</>}
         </button>
+        {error && <p className="text-red-500 text-xs mt-2">{error}</p>}
       </div>
     )
   }
