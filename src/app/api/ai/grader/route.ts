@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '')
 
 const GRADER_SYSTEM_PROMPT = `You are the world's most accurate AI exam grader, trained on thousands of Irish state exam marking schemes. You work for Bloom Studies.
 

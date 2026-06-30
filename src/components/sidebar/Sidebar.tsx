@@ -7,11 +7,12 @@ import {
   LayoutDashboard, Brain, FileCheck, Layers, BookOpen,
   Headphones, FileText, Calendar, TrendingUp, Settings,
   ChevronLeft, ChevronRight, Moon, Sun, Users, GraduationCap,
-  Sparkles, Crown
+  Crown, LogOut
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useState, useEffect } from 'react'
 import { useTheme } from '@/components/ThemeProvider'
+import { useAuth } from '@/components/AuthProvider'
 import UpgradePrompt from '@/components/ui/UpgradePrompt'
 
 const NAV_GROUPS = [
@@ -24,10 +25,11 @@ const NAV_GROUPS = [
       { name: 'Flashcards', href: '/dashboard/flashcards', icon: Layers },
       { name: 'AI Notes', href: '/dashboard/notes', icon: BookOpen },
       { name: 'Audio Learning', href: '/dashboard/audio', icon: Headphones },
+      { name: 'Academy', href: '/dashboard/academy', icon: GraduationCap },
     ],
   },
   {
-    label: 'Plan',
+    label: 'Study',
     items: [
       { name: 'Study Planner', href: '/dashboard/planner', icon: Calendar },
       { name: 'Past Papers', href: '/dashboard/papers', icon: FileText },
@@ -38,7 +40,13 @@ const NAV_GROUPS = [
     label: 'Community',
     items: [
       { name: 'Community', href: '/dashboard/community', icon: Users, badge: 'New' },
-      { name: 'Bloom Learn', href: '/dashboard/learn', icon: GraduationCap },
+    ],
+  },
+  {
+    label: 'Account',
+    items: [
+      { name: 'Premium', href: '/dashboard/settings?tab=billing', icon: Crown, badge: 'Pro' },
+      { name: 'Settings', href: '/dashboard/settings', icon: Settings },
     ],
   },
 ]
@@ -46,8 +54,18 @@ const NAV_GROUPS = [
 export default function Sidebar() {
   const pathname = usePathname()
   const { theme, toggleTheme } = useTheme()
+  const { displayName, user, authEnabled, signOut } = useAuth()
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [isMobileOpen, setIsMobileOpen] = useState(false)
+  const [signingOut, setSigningOut] = useState(false)
+
+  const handleSignOut = async () => {
+    setSigningOut(true)
+    await signOut()
+    window.location.href = '/auth/signin'
+  }
+
+  const initial = (displayName || 'B').trim().charAt(0).toUpperCase()
 
   // Close mobile sidebar on route change
   useEffect(() => { setIsMobileOpen(false) }, [pathname])
@@ -131,7 +149,9 @@ export default function Sidebar() {
               )}
               <div className="space-y-0.5">
                 {group.items.map(item => {
-                  const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
+                  const hasQuery = item.href.includes('?')
+                  const baseHref = item.href.split('?')[0]
+                  const isActive = !hasQuery && (pathname === baseHref || (baseHref !== '/dashboard' && pathname.startsWith(baseHref)))
                   return (
                     <div key={item.name} className="relative group/nav">
                       <Link
@@ -178,26 +198,38 @@ export default function Sidebar() {
         </nav>
 
         {/* Bottom actions */}
-        <div className="shrink-0 border-t border-slate-200 dark:border-slate-800 p-2 space-y-0.5">
+        <div className="shrink-0 border-t border-slate-200 dark:border-slate-800 p-2 space-y-1.5">
           {/* Upgrade prompt — free users only */}
           {!isCollapsed && (
             <UpgradePrompt feature="Premium Features" description="Unlock unlimited AI access" inline />
           )}
 
-          <Link
-            href="/dashboard/settings"
-            aria-label="Settings"
-            className={cn(
-              'flex items-center gap-3 rounded-xl transition-all duration-150',
-              isCollapsed ? 'h-10 w-10 mx-auto justify-center' : 'px-3 py-2.5',
-              pathname === '/dashboard/settings'
-                ? 'bg-gradient-to-r from-primary-500 to-accent-500 text-white shadow-md shadow-primary-500/20'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/70 hover:text-slate-900 dark:hover:text-white'
-            )}
-          >
-            <Settings className="w-[18px] h-[18px] shrink-0" />
-            {!isCollapsed && <span className="font-medium text-sm">Settings</span>}
-          </Link>
+          {/* User chip + sign out */}
+          {authEnabled && user && (
+            <div className={cn('flex items-center gap-2', isCollapsed ? 'flex-col' : 'px-1')}>
+              <div
+                className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary-500 to-accent-500 text-white font-bold flex items-center justify-center shrink-0"
+                aria-hidden="true"
+              >
+                {initial}
+              </div>
+              {!isCollapsed && (
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">{displayName}</p>
+                  <p className="text-xs text-slate-400 truncate">{user.email || user.phone}</p>
+                </div>
+              )}
+              <button
+                onClick={handleSignOut}
+                disabled={signingOut}
+                aria-label="Sign out"
+                title="Sign out"
+                className="btn-icon shrink-0 disabled:opacity-50"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
+          )}
 
           <div className={cn('flex', isCollapsed ? 'flex-col gap-0.5' : 'flex-row gap-1')}>
             <button

@@ -213,7 +213,7 @@ export default function ExamGraderPage() {
             className={cn('px-5 py-2 rounded-lg text-sm font-medium capitalize transition-all',
               activeTab === tab ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
             )}>
-            {tab === 'grade' ? '📝 Grade Answer' : tab === 'history' ? '📚 History' : '📈 Progress'}
+            {tab === 'grade' ? '📝 Grade Answer' : tab === 'history' ? '📚 Answer History' : '📈 Progress'}
           </button>
         ))}
       </div>

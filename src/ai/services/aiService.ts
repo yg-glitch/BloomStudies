@@ -51,9 +51,9 @@ class AIService {
     const env = process.env
 
     this.providers.set('gemini', {
-      provider: new GeminiProvider(env.GEMINI_API_KEY || ''),
+      provider: new GeminiProvider(env.GEMINI_API_KEY || env.GOOGLE_API_KEY || ''),
       type: 'gemini',
-      available: !!env.GEMINI_API_KEY,
+      available: !!(env.GEMINI_API_KEY || env.GOOGLE_API_KEY),
     })
 
     this.providers.set('openai', {

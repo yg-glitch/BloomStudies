@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next"
 import { Inter, Calistoga } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider } from "@/components/ThemeProvider"
+import { AuthProvider } from "@/components/AuthProvider"
 import { SubscriptionProvider } from "@/components/SubscriptionProvider"
 import { ToastProvider } from "@/components/ui/Toast"
 
@@ -61,13 +62,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           Skip to main content
         </a>
         <ThemeProvider>
-          <SubscriptionProvider>
-            <ToastProvider>
-              <div id="main-content">
-                {children}
-              </div>
-            </ToastProvider>
-          </SubscriptionProvider>
+          <AuthProvider>
+            <SubscriptionProvider>
+              <ToastProvider>
+                <div id="main-content">
+                  {children}
+                </div>
+              </ToastProvider>
+            </SubscriptionProvider>
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>

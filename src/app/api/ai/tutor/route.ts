@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '')
 
 const IRISH_TEACHER_SYSTEM_PROMPT = `You are an expert Irish teacher called "Bloom AI", working for Bloom Studies — an AI-powered learning platform for Irish secondary school students.
 
