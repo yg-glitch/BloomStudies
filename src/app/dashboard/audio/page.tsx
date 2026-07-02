@@ -9,24 +9,11 @@ import {
   FastForward, Rewind, AlignLeft, Trash2
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useLocalStorage } from '@/lib/useLocalStorage'
 import { useToast } from '@/components/ui/Toast'
+import { createClient } from '@/lib/supabase/client'
+import { getAudioLessons, createAudioLesson, updateAudioLesson, deleteAudioLesson, updateAudioLessonProgress, addAudioLessonBookmark, type AudioLesson } from '@/lib/database/audio-lessons'
 
 interface Chapter { title: string; startIndex: number; summary: string }
-
-interface AudioLesson {
-  id: string
-  title: string
-  subject: string
-  duration: number
-  script: string
-  chapters: Chapter[]
-  transcript: string
-  createdAt: string
-  voice: string
-  bookmarks: number[]   // character positions
-  progress: number      // 0-1
-}
 
 const VOICES = [
   { id: 'teacher-irl', label: 'Irish Teacher', description: 'Warm, encouraging', emoji: '👩‍🏫' },
@@ -58,7 +45,9 @@ function formatTime(seconds: number) {
 }
 
 export default function AudioLearningPage() {
-  const [lessons, setLessons, , lessonsLoaded] = useLocalStorage<AudioLesson[]>('bloom-audio-lessons', [])
+  const supabase = createClient()
+  const [lessons, setLessons] = useState<AudioLesson[]>([])
+  const [loading, setLoading] = useState(true)
   const [active, setActive] = useState<AudioLesson | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
@@ -77,14 +66,34 @@ export default function AudioLearningPage() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Load lessons from Supabase
+  useEffect(() => {
+    loadLessons()
+  }, [])
+
+  const loadLessons = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const lessonsData = await getAudioLessons(user.id)
+      setLessons(lessonsData)
+    } catch (error) {
+      console.error('Error loading lessons:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const totalChars = active?.script.length || 1
   const charProgress = Math.min(currentTime / (active?.duration || 1), 1)
   const currentCharPos = Math.floor(charProgress * totalChars)
 
-  // Find current chapter
-  const currentChapter = active?.chapters.reduce((found, ch) =>
-    ch.startIndex <= currentCharPos ? ch : found
-  , active.chapters[0])
+  // Find current chapter (parse from transcript for now)
+  const currentChapterTitle = active?.transcript.split('\n\n').find((_, i) => {
+    const charStart = active.transcript.split('\n\n').slice(0, i).join('\n\n').length
+    return charStart <= currentCharPos && currentCharPos < charStart + 100
+  })?.slice(0, 50) || ''
 
   const stopSpeech = useCallback(() => {
     if (typeof window !== 'undefined') {
@@ -148,15 +157,9 @@ export default function AudioLearningPage() {
     }
   }
 
-  const skipToChapter = (ch: Chapter) => {
-    const charPos = ch.startIndex
-    const timePos = (charPos / totalChars) * (active?.duration || 0)
-    setCurrentTime(timePos)
-    if (isPlaying) startSpeech(charPos)
-  }
-
-  const addBookmark = () => {
+  const addBookmark = async () => {
     if (!active) return
+    await addAudioLessonBookmark(active.id, currentCharPos)
     const updated = { ...active, bookmarks: [...(active.bookmarks || []), currentCharPos] }
     setActive(updated)
     setLessons(prev => prev.map(l => l.id === updated.id ? updated : l))
@@ -187,6 +190,9 @@ export default function AudioLearningPage() {
     if (!uploadText.trim()) { setGenerateError('Please add some content first.'); return }
     setIsGenerating(true); setGenerateError('')
     try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Not authenticated')
+
       const res = await fetch('/api/ai/audio-script', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -194,17 +200,26 @@ export default function AudioLearningPage() {
       })
       if (!res.ok) throw new Error((await res.json()).error)
       const data = await res.json()
-      const lesson: AudioLesson = {
-        id: Date.now().toString(), ...data,
-        voice: selectedVoice, bookmarks: [], progress: 0,
-        createdAt: new Date().toISOString(),
-      }
-      setLessons(prev => [lesson, ...prev])
-      setActive(lesson); setCurrentTime(0)
+
+      const createdLesson = await createAudioLesson(user.id, {
+        title: data.title || uploadSubject || 'Audio Lesson',
+        subject: uploadSubject || 'General',
+        duration: data.duration || 300,
+        script: data.script || uploadText,
+        transcript: data.transcript || uploadText,
+        voice: selectedVoice,
+        bookmarks: [],
+        progress: 0,
+      })
+
+      if (!createdLesson) throw new Error('Failed to save lesson')
+
+      setLessons(prev => [createdLesson, ...prev])
+      setActive(createdLesson); setCurrentTime(0)
       setActiveTab('player'); setShowGenerate(false)
       setUploadText('')
-      const mins = Math.round((data.duration || 0) / 60)
-      toastSuccess('Podcast ready!', `${mins} min · ${data.chapters?.length || 0} chapters`)
+      const mins = Math.round((data.duration || 300) / 60)
+      toastSuccess('Podcast ready!', `${mins} min`)
       toastXP(20, 'Created audio lesson')
     } catch (err: any) {
       setGenerateError(err.message || 'Failed to generate.')
@@ -256,7 +271,12 @@ export default function AudioLearningPage() {
                   <div className={cn('font-medium text-sm truncate', active?.id !== lesson.id && 'text-slate-700 dark:text-slate-300')}>{lesson.title}</div>
                   <div className={cn('text-xs mt-0.5', active?.id === lesson.id ? 'text-white/70' : 'text-slate-400')}>{lesson.subject} • {formatTime(lesson.duration)}</div>
                 </div>
-                <button onClick={e => { e.stopPropagation(); if (active?.id === lesson.id) { setActive(null); stopSpeech() } setLessons(prev => prev.filter(l => l.id !== lesson.id)) }}
+                <button onClick={async (e) => {
+                  e.stopPropagation()
+                  await deleteAudioLesson(lesson.id)
+                  if (active?.id === lesson.id) { setActive(null); stopSpeech() }
+                  setLessons(prev => prev.filter(l => l.id !== lesson.id))
+                }}
                   className="opacity-0 group-hover:opacity-100 p-1 rounded shrink-0 hover:text-red-500 transition-all">
                   <Trash2 className="w-3 h-3" />
                 </button>
@@ -319,7 +339,7 @@ export default function AudioLearningPage() {
                     </div>
                     <h2 className="font-display text-2xl font-bold mb-1">{active.title}</h2>
                     <p className="text-white/80">{active.subject}</p>
-                    {currentChapter && <p className="text-white/60 text-sm mt-1">📑 {currentChapter.title}</p>}
+                    {currentChapterTitle && <p className="text-white/60 text-sm mt-1">📑 {currentChapterTitle}</p>}
                   </div>
 
                   {/* Progress */}
@@ -411,18 +431,19 @@ export default function AudioLearningPage() {
               {/* CHAPTERS TAB */}
               {activeTab === 'chapters' && (
                 <div className="p-6 max-w-2xl mx-auto space-y-3">
-                  {active.chapters.map((ch, i) => {
-                    const isActive = currentChapter?.title === ch.title
+                  {active.transcript.split('\n\n').map((section, i) => {
+                    const charStart = active.transcript.split('\n\n').slice(0, i).join('\n\n').length
+                    const isActive = currentChapterTitle === section.slice(0, 50)
                     return (
-                      <button key={i} onClick={() => skipToChapter(ch)}
+                      <button key={i} onClick={() => { const t = (charStart / totalChars) * active.duration; seek(t) }}
                         className={cn('w-full text-left p-4 rounded-xl transition-all', isActive ? 'bg-gradient-to-r from-primary-500 to-accent-500 text-white shadow-lg' : 'card hover:shadow-md')}>
                         <div className="flex items-center gap-3">
                           <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold shrink-0', isActive ? 'bg-white/20' : 'bg-primary-100 dark:bg-primary-900 text-primary-600 dark:text-primary-400')}>
                             {i + 1}
                           </div>
                           <div>
-                            <div className="font-semibold">{ch.title}</div>
-                            <div className={cn('text-sm', isActive ? 'text-white/70' : 'text-slate-500')}>{ch.summary}</div>
+                            <div className="font-semibold line-clamp-1">{section.slice(0, 50)}</div>
+                            <div className={cn('text-sm line-clamp-1', isActive ? 'text-white/70' : 'text-slate-500')}>{section.slice(50, 100) || 'Section'}</div>
                           </div>
                           {isActive && <div className="ml-auto w-2 h-2 rounded-full bg-white animate-pulse" />}
                         </div>

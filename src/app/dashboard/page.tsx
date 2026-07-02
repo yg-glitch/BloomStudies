@@ -9,47 +9,75 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { StatCardSkeleton } from '@/components/ui/Skeleton'
-import { useLocalStorage } from '@/lib/useLocalStorage'
 import { StreakCelebration } from '@/components/ui/StreakCelebration'
+import { createClient } from '@/lib/supabase/client'
+import { getProfile } from '@/lib/database/profiles'
+import { getUpcomingExams } from '@/lib/database/exams'
+import { getProgress } from '@/lib/database/progress'
+import type { Profile } from '@/lib/database/profiles'
 
 export default function Dashboard() {
+  const supabase = createClient()
   const [mounted, setMounted] = useState(false)
   const [showStreak, setShowStreak] = useState(false)
-  const [lastStreakShown, setLastStreakShown] = useLocalStorage<string>('bloom-streak-shown', '')
-  const [graderSubmissions] = useLocalStorage<any[]>('bloom-grader-submissions', [])
-  const [flashcardDecks] = useLocalStorage<any[]>('bloom-flashcard-decks', [])
-
-  const STREAK_KEY = 'bloom-study-streak'
-  const STREAK = (() => {
-    if (typeof window === 'undefined') return 12
-    const stored = localStorage.getItem(STREAK_KEY)
-    return stored ? parseInt(stored) : 12
-  })()
+  const [profile, setProfile] = useState<Profile | null>(null)
+  const [upcomingExams, setUpcomingExams] = useState<any[]>([])
+  const [progress, setProgress] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     setMounted(true)
-    // Show streak celebration once per day on milestone days
-    const today = new Date().toDateString()
-    const MILESTONES = [3, 7, 14, 21, 30, 60, 100]
-    if (lastStreakShown !== today && MILESTONES.includes(STREAK)) {
-      const timer = setTimeout(() => setShowStreak(true), 1200)
-      return () => clearTimeout(timer)
-    }
+    loadData()
   }, [])
+
+  const loadData = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const [profileData, examsData, progressData] = await Promise.all([
+        getProfile(user.id),
+        getUpcomingExams(user.id),
+        getProgress(user.id),
+      ])
+
+      setProfile(profileData)
+      setUpcomingExams(examsData)
+      setProgress(progressData)
+
+      // Show streak celebration on milestone days
+      if (profileData) {
+        const MILESTONES = [3, 7, 14, 21, 30, 60, 100]
+        const lastStreakShown = localStorage.getItem('bloom-streak-shown')
+        const today = new Date().toDateString()
+        if (lastStreakShown !== today && MILESTONES.includes(profileData.streak)) {
+          setTimeout(() => setShowStreak(true), 1200)
+        }
+      }
+    } catch (error) {
+      console.error('Error loading dashboard data:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleStreakDismiss = () => {
     setShowStreak(false)
-    setLastStreakShown(new Date().toDateString())
+    localStorage.setItem('bloom-streak-shown', new Date().toDateString())
   }
 
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
 
+  const totalHours = progress.reduce((sum: number, p: any) => sum + (p.hours_studied || 0), 0)
+  const totalLessons = progress.reduce((sum: number, p: any) => sum + (p.lessons_completed || 0), 0)
+  const totalFlashcards = progress.reduce((sum: number, p: any) => sum + (p.flashcards_mastered || 0), 0)
+
   const stats = [
-    { label: 'Study Streak', value: '12', unit: 'days', icon: Flame, gradient: 'from-orange-500 to-red-500', bg: 'bg-orange-50 dark:bg-orange-950/40', text: 'text-orange-600 dark:text-orange-400', href: '/dashboard/progress' },
-    { label: "Today's Goals", value: '3', unit: '/ 5', icon: Target, gradient: 'from-primary-500 to-accent-500', bg: 'bg-primary-50 dark:bg-primary-950/40', text: 'text-primary-600 dark:text-primary-400', href: '/dashboard/planner' },
-    { label: 'Weekly Hours', value: '18.5', unit: 'h', icon: Clock, gradient: 'from-blue-500 to-indigo-500', bg: 'bg-blue-50 dark:bg-blue-950/40', text: 'text-blue-600 dark:text-blue-400', href: '/dashboard/progress' },
-    { label: 'Bloom Score', value: '847', unit: 'pts', icon: Award, gradient: 'from-amber-500 to-orange-500', bg: 'bg-amber-50 dark:bg-amber-950/40', text: 'text-amber-600 dark:text-amber-400', href: '/dashboard/progress' },
+    { label: 'Study Streak', value: profile?.streak?.toString() || '0', unit: 'days', icon: Flame, gradient: 'from-orange-500 to-red-500', bg: 'bg-orange-50 dark:bg-orange-950/40', text: 'text-orange-600 dark:text-orange-400', href: '/dashboard/progress' },
+    { label: "Today's Goals", value: '0', unit: '/ 5', icon: Target, gradient: 'from-primary-500 to-accent-500', bg: 'bg-primary-50 dark:bg-primary-950/40', text: 'text-primary-600 dark:text-primary-400', href: '/dashboard/planner' },
+    { label: 'Total Hours', value: totalHours.toFixed(1), unit: 'h', icon: Clock, gradient: 'from-blue-500 to-indigo-500', bg: 'bg-blue-50 dark:bg-blue-950/40', text: 'text-blue-600 dark:text-blue-400', href: '/dashboard/progress' },
+    { label: 'Bloom Score', value: profile?.bloom_score?.toString() || '0', unit: 'pts', icon: Award, gradient: 'from-amber-500 to-orange-500', bg: 'bg-amber-50 dark:bg-amber-950/40', text: 'text-amber-600 dark:text-amber-400', href: '/dashboard/progress' },
   ]
 
   const quickActions = [
@@ -59,26 +87,37 @@ export default function Dashboard() {
     { label: 'Audio Learning', desc: 'Learn on the go', icon: Headphones, href: '/dashboard/audio', gradient: '' },
   ]
 
-  const upcomingExams = [
-    { subject: 'Mathematics', date: 'June 15', daysLeft: 18, progress: 75, color: 'bg-violet-500' },
-    { subject: 'English', date: 'June 8', daysLeft: 11, progress: 60, color: 'bg-fuchsia-500' },
-    { subject: 'Irish', date: 'June 12', daysLeft: 15, progress: 45, color: 'bg-blue-500' },
-  ]
+  const upcomingExamsData = upcomingExams.map(exam => {
+    const examDate = new Date(exam.exam_date)
+    const today = new Date()
+    const daysLeft = Math.ceil((examDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+    return {
+      subject: exam.subject,
+      date: examDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
+      daysLeft: Math.max(0, daysLeft),
+      progress: 0, // Will be calculated based on progress data
+      color: 'bg-violet-500',
+    }
+  })
 
-  const recentActivity = [
-    { type: 'flashcard', subject: 'Physics', action: 'Completed 20 cards', time: '2h ago', icon: Layers, color: 'text-blue-500', bg: 'bg-blue-50 dark:bg-blue-950/30' },
-    { type: 'grader', subject: 'Chemistry', action: 'Graded — 85%', time: '4h ago', icon: FileCheck, color: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-950/30' },
-    { type: 'notes', subject: 'Biology', action: 'Created notes', time: 'Yesterday', icon: BookOpen, color: 'text-violet-500', bg: 'bg-violet-50 dark:bg-violet-950/30' },
-    { type: 'audio', subject: 'History', action: 'Listened to lesson', time: 'Yesterday', icon: Headphones, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-950/30' },
-  ]
+  const recentActivity: Array<{
+    type: string
+    subject: string
+    action: string
+    time: string
+    icon: any
+    color: string
+    bg: string
+  }> = [] // Will be populated from activity logs
 
-  const recommendations = [
-    { title: 'Focus on Calculus', reason: 'Weakest topic in Maths', priority: 'high', href: '/dashboard/tutor' },
-    { title: 'Review Poetry', reason: 'English exam in 11 days', priority: 'medium', href: '/dashboard/notes' },
-    { title: 'Practice Irish Oral', reason: 'Oral in 2 weeks', priority: 'high', href: '/dashboard/tutor' },
-  ]
+  const recommendations: Array<{
+    title: string
+    reason: string
+    priority: string
+    href: string
+  }> = [] // Will be generated by AI based on user data
 
-  if (!mounted) {
+  if (!mounted || loading) {
     return (
       <div className="page-container py-6 space-y-6">
         <div className="space-y-2">
@@ -93,16 +132,16 @@ export default function Dashboard() {
 
   return (
     <div className="page-container py-6 space-y-6 animate-fade-in">
-      {showStreak && <StreakCelebration streak={STREAK} onDismiss={handleStreakDismiss} />}
+      {showStreak && <StreakCelebration streak={profile?.streak || 0} onDismiss={handleStreakDismiss} />}
 
       {/* ── Welcome header ── */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="font-display text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">
-            {greeting}, Student 👋
+            {greeting}, {profile?.full_name?.split(' ')[0] || 'Student'} 👋
           </h1>
           <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm sm:text-base">
-            You&apos;re on a <strong className="text-orange-500">12-day streak</strong> — keep the momentum going!
+            You&apos;re on a <strong className="text-orange-500">{profile?.streak || 0}-day streak</strong> — keep the momentum going!
           </p>
         </div>
         <Link href="/dashboard/planner" className="btn-secondary text-sm shrink-0">
@@ -173,29 +212,29 @@ export default function Dashboard() {
             </Link>
           </div>
           <div className="space-y-3">
-            {upcomingExams.map((exam) => (
-              <div key={exam.subject} className="flex items-center gap-4 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-                <div className={cn('w-1.5 h-12 rounded-full shrink-0', exam.color)} />
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-slate-900 dark:text-white text-sm">{exam.subject}</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{exam.date}</p>
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="font-display font-bold text-slate-900 dark:text-white text-sm">{exam.progress}%</p>
-                  <p className="text-xs text-slate-400">prepared</p>
-                </div>
-                <div className="w-20 hidden sm:block">
-                  <div className="flex items-center justify-end mb-1">
-                    <span className={cn('text-xs font-bold', exam.daysLeft <= 7 ? 'text-red-500' : exam.daysLeft <= 14 ? 'text-amber-500' : 'text-slate-400')}>
-                      {exam.daysLeft}d
-                    </span>
+            {upcomingExamsData.length > 0 ? (
+              upcomingExamsData.map((exam) => (
+                <div key={exam.subject} className="flex items-center gap-4 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                  <div className={cn('w-1.5 h-12 rounded-full shrink-0', exam.color)} />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-slate-900 dark:text-white text-sm">{exam.subject}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{exam.date}</p>
                   </div>
-                  <div className="h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                    <div className={cn('h-full rounded-full transition-all duration-700', exam.color)} style={{ width: `${exam.progress}%` }} />
+                  <div className="text-right shrink-0">
+                    <p className="font-display font-bold text-slate-900 dark:text-white text-sm">{exam.daysLeft}d</p>
+                    <p className="text-xs text-slate-400">left</p>
                   </div>
                 </div>
+              ))
+            ) : (
+              <div className="text-center py-8">
+                <Calendar className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+                <p className="text-slate-500 dark:text-slate-400 text-sm">No upcoming exams</p>
+                <Link href="/dashboard/planner" className="text-primary-600 dark:text-primary-400 text-sm font-medium hover:underline mt-2 inline-block">
+                  Add your first exam
+                </Link>
               </div>
-            ))}
+            )}
           </div>
         </div>
 
@@ -206,23 +245,30 @@ export default function Dashboard() {
             AI Recommendations
           </h2>
           <div className="space-y-2.5">
-            {recommendations.map((rec) => (
-              <Link
-                key={rec.title}
-                href={rec.href}
-                className="group flex items-start gap-3 p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
-              >
-                <div className={cn(
-                  'w-2 h-2 rounded-full mt-1.5 shrink-0',
-                  rec.priority === 'high' ? 'bg-red-500' : 'bg-amber-500'
-                )} />
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-slate-900 dark:text-white text-sm group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">{rec.title}</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{rec.reason}</p>
-                </div>
-                <ChevronRight className="w-4 h-4 text-slate-400 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
-              </Link>
-            ))}
+            {recommendations.length > 0 ? (
+              recommendations.map((rec) => (
+                <Link
+                  key={rec.title}
+                  href={rec.href}
+                  className="group flex items-start gap-3 p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                >
+                  <div className={cn(
+                    'w-2 h-2 rounded-full mt-1.5 shrink-0',
+                    rec.priority === 'high' ? 'bg-red-500' : 'bg-amber-500'
+                  )} />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-slate-900 dark:text-white text-sm group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">{rec.title}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{rec.reason}</p>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-slate-400 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </Link>
+              ))
+            ) : (
+              <div className="text-center py-8">
+                <Sparkles className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+                <p className="text-slate-500 dark:text-slate-400 text-sm">Start studying to get AI recommendations</p>
+              </div>
+            )}
           </div>
           <Link href="/dashboard/progress" className="btn-secondary w-full mt-4 text-sm justify-center">
             <BarChart3 className="w-4 h-4" />
@@ -241,18 +287,26 @@ export default function Dashboard() {
             Recent Activity
           </h2>
           <div className="space-y-3">
-            {recentActivity.map((item, i) => (
-              <div key={i} className="flex items-center gap-3">
-                <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center shrink-0', item.bg)}>
-                  <item.icon className={cn('w-[18px] h-[18px]', item.color)} aria-hidden="true" />
+            {recentActivity.length > 0 ? (
+              recentActivity.map((item, i) => (
+                <div key={i} className="flex items-center gap-3">
+                  <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center shrink-0', item.bg)}>
+                    <item.icon className={cn('w-[18px] h-[18px]', item.color)} aria-hidden="true" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-slate-900 dark:text-white text-sm truncate">{item.action}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{item.subject}</p>
+                  </div>
+                  <span className="text-xs text-slate-400 shrink-0">{item.time}</span>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-slate-900 dark:text-white text-sm truncate">{item.action}</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">{item.subject}</p>
-                </div>
-                <span className="text-xs text-slate-400 shrink-0">{item.time}</span>
+              ))
+            ) : (
+              <div className="text-center py-8">
+                <TrendingUp className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+                <p className="text-slate-500 dark:text-slate-400 text-sm">No recent activity</p>
+                <p className="text-slate-400 dark:text-slate-500 text-xs mt-1">Start studying to see your activity here</p>
               </div>
-            ))}
+            )}
           </div>
         </div>
 

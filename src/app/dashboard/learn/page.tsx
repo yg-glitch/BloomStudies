@@ -1,446 +1,328 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   BookOpen, Search, Play, FileText, Headphones, Layers,
   Star, Clock, Eye, Heart, Bookmark, Sparkles, Filter,
-  ChevronRight, Crown, Check, TrendingUp, Users, Download,
-  MessageSquare, X, ArrowLeft, Volume2, Maximize, SkipForward,
-  SkipBack, PauseCircle, PlayCircle, BarChart2, Plus, Upload
+  ChevronRight, Check, TrendingUp, ArrowLeft, X,
+  PauseCircle, PlayCircle, Maximize, SkipForward, SkipBack,
+  MessageSquare, Upload, Plus, Crown
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useLocalStorage } from '@/lib/useLocalStorage'
 import MarkdownRenderer from '@/components/ui/MarkdownRenderer'
-import {
-  LearnResource, Creator, ContentType, ContentCategory,
-  CONTENT_TYPE_INFO, THUMBNAIL_GRADIENTS, generateMockResources
-} from '@/lib/learn'
+import { useLocalStorage } from '@/lib/useLocalStorage'
+import { useToast } from '@/components/ui/Toast'
 
-const CATEGORIES: { key: ContentCategory | 'all'; label: string; emoji: string }[] = [
+// ── Types ──────────────────────────────────────────────────────
+type ContentType = 'video' | 'article' | 'notes' | 'guide' | 'podcast' | 'flashcards' | 'quiz' | 'sample-answer' | 'marking-scheme'
+type ContentCategory = 'all' | 'leaving-cert' | 'junior-cycle' | 'study-skills' | 'exam-technique' | 'cao' | 'wellbeing' | 'ai-tips' | 'college'
+
+interface Resource {
+  id: string; type: ContentType; title: string; description: string
+  subject: string; level: 'Leaving Cert' | 'Junior Cycle' | 'Both'
+  category: ContentCategory; tags: string[]
+  duration?: number; wordCount?: number; views: number; likes: number
+  rating: number; ratingCount: number; thumbnailColor: string
+  isFree: boolean; publishedAt: string; progress?: number
+  creator: { name: string; avatar: string; verified: boolean; type: string; followers: number }
+  content?: string
+}
+
+// ── Constants ──────────────────────────────────────────────────
+const CATEGORIES: { key: ContentCategory; label: string; emoji: string }[] = [
   { key: 'all', label: 'All', emoji: '🌟' },
   { key: 'leaving-cert', label: 'Leaving Cert', emoji: '🎓' },
   { key: 'junior-cycle', label: 'Junior Cycle', emoji: '📚' },
   { key: 'study-skills', label: 'Study Skills', emoji: '🧠' },
   { key: 'exam-technique', label: 'Exam Technique', emoji: '✍️' },
   { key: 'cao', label: 'CAO Guide', emoji: '🎯' },
+  { key: 'college', label: 'College Prep', emoji: '🏛️' },
   { key: 'wellbeing', label: 'Wellbeing', emoji: '💚' },
-  { key: 'ai-tips', label: 'AI Tips', emoji: '🤖' },
+  { key: 'ai-tips', label: 'AI Study Tips', emoji: '🤖' },
 ]
 
-const CONTENT_FILTERS: (ContentType | 'all')[] = ['all', 'video', 'article', 'notes', 'guide', 'podcast', 'flashcards', 'quiz', 'sample-answer', 'marking-scheme']
+const TYPE_INFO: Record<ContentType, { label: string; emoji: string; color: string }> = {
+  video: { label: 'Video', emoji: '🎬', color: 'bg-red-100 dark:bg-red-950/30 text-red-700 dark:text-red-400' },
+  article: { label: 'Article', emoji: '📄', color: 'bg-blue-100 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400' },
+  notes: { label: 'Notes', emoji: '📝', color: 'bg-violet-100 dark:bg-violet-950/30 text-violet-700 dark:text-violet-400' },
+  guide: { label: 'Study Guide', emoji: '📚', color: 'bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400' },
+  podcast: { label: 'Podcast', emoji: '🎧', color: 'bg-orange-100 dark:bg-orange-950/30 text-orange-700 dark:text-orange-400' },
+  pdf: { label: 'PDF', emoji: '📋', color: 'bg-amber-100 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400' },
+  flashcards: { label: 'Flashcards', emoji: '🃏', color: 'bg-pink-100 dark:bg-pink-950/30 text-pink-700 dark:text-pink-400' },
+  quiz: { label: 'Quiz', emoji: '❓', color: 'bg-cyan-100 dark:bg-cyan-950/30 text-cyan-700 dark:text-cyan-400' },
+  'sample-answer': { label: 'Sample Answer', emoji: '✍️', color: 'bg-teal-100 dark:bg-teal-950/30 text-teal-700 dark:text-teal-400' },
+  'marking-scheme': { label: 'Marking Scheme', emoji: '🎯', color: 'bg-indigo-100 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400' },
+} as any
 
-type Tab = 'discover' | 'saved' | 'creator'
+const GRADIENTS = [
+  'from-violet-500 to-purple-600', 'from-fuchsia-500 to-pink-600',
+  'from-blue-500 to-indigo-600', 'from-emerald-500 to-teal-600',
+  'from-orange-500 to-red-500', 'from-cyan-500 to-blue-500',
+  'from-amber-500 to-orange-600', 'from-rose-500 to-pink-600',
+]
 
-export default function BloomLearnPage() {
-  const [resources, setResources] = useLocalStorage<LearnResource[]>('bloom-learn-resources', generateMockResources())
-  const [category, setCategory] = useState<ContentCategory | 'all'>('all')
-  const [contentFilter, setContentFilter] = useState<ContentType | 'all'>('all')
-  const [searchQuery, setSearchQuery] = useState('')
-  const [activeTab, setActiveTab] = useState<Tab>('discover')
-  const [activeResource, setActiveResource] = useState<LearnResource | null>(null)
-  const [bookmarks, setBookmarks] = useLocalStorage<string[]>('bloom-learn-bookmarks', [])
+const CREATORS = [
+  { name: 'Ms. Patricia Ryan', avatar: '👩‍🏫', verified: true, type: 'teacher', followers: 4230 },
+  { name: 'Mr. Seán Walsh', avatar: '👨‍🏫', verified: true, type: 'teacher', followers: 3180 },
+  { name: 'Dr. Aoife Ní Bhriain', avatar: '👩‍🔬', verified: true, type: 'tutor', followers: 2940 },
+  { name: 'Bloom Studies', avatar: '🌸', verified: true, type: 'bloom', followers: 18500 },
+]
+
+const MOCK_RESOURCES: Resource[] = [
+  { id: 'r1', type: 'video', title: 'How to Write a Perfect Leaving Cert English Essay', description: 'Step-by-step walkthrough of the H1 essay structure with live annotation of a top student answer.', subject: 'English', level: 'Leaving Cert', category: 'leaving-cert', tags: ['english', 'essay', 'h1'], duration: 28, views: 12400, likes: 892, rating: 4.9, ratingCount: 234, thumbnailColor: GRADIENTS[0], isFree: true, publishedAt: new Date(Date.now() - 7 * 86400000).toISOString(), creator: CREATORS[0], progress: 45 },
+  { id: 'r2', type: 'notes', title: 'Complete Calculus Notes — Higher Level Leaving Cert', description: 'All differentiation and integration topics with worked examples, common mistakes, and exam tips.', subject: 'Mathematics', level: 'Leaving Cert', category: 'leaving-cert', tags: ['maths', 'calculus', 'higher'], wordCount: 4200, views: 8930, likes: 674, rating: 4.8, ratingCount: 189, thumbnailColor: GRADIENTS[2], isFree: true, publishedAt: new Date(Date.now() - 3 * 86400000).toISOString(), creator: CREATORS[1] },
+  { id: 'r3', type: 'guide', title: 'Cell Biology Mastery Guide — Everything for Paper 1', description: 'The definitive resource for Leaving Cert Biology Cell Biology. Covers all mandatory experiments and exam questions.', subject: 'Biology', level: 'Leaving Cert', category: 'leaving-cert', tags: ['biology', 'cells', 'revision'], wordCount: 6100, views: 7420, likes: 543, rating: 4.9, ratingCount: 156, thumbnailColor: GRADIENTS[3], isFree: true, publishedAt: new Date(Date.now() - 14 * 86400000).toISOString(), creator: CREATORS[2] },
+  { id: 'r4', type: 'article', title: '10 Study Techniques Backed by Science', description: 'Stop wasting time on ineffective study. Evidence-based techniques that transform your revision sessions.', subject: 'Study Skills', level: 'Both', category: 'study-skills', tags: ['study-skills', 'productivity', 'tips'], wordCount: 2800, views: 23100, likes: 1890, rating: 5.0, ratingCount: 467, thumbnailColor: GRADIENTS[5], isFree: true, publishedAt: new Date(Date.now() - 2 * 86400000).toISOString(), creator: CREATORS[3] },
+  { id: 'r5', type: 'sample-answer', title: 'H1 Shakespeare Sample Answer — Hamlet', description: 'Full annotated H1 answer for the Hamlet single text question with examiner commentary.', subject: 'English', level: 'Leaving Cert', category: 'leaving-cert', tags: ['english', 'hamlet', 'sample-answer'], wordCount: 1800, views: 9870, likes: 723, rating: 4.8, ratingCount: 201, thumbnailColor: GRADIENTS[7], isFree: true, publishedAt: new Date(Date.now() - 5 * 86400000).toISOString(), creator: CREATORS[0] },
+  { id: 'r6', type: 'podcast', title: 'CAO Points Guide 2025 — Everything You Need to Know', description: 'Full breakdown of CAO points, popular courses, and how to maximise your CAO application.', subject: 'CAO Guidance', level: 'Leaving Cert', category: 'cao', tags: ['cao', 'points', '2025'], duration: 45, views: 31200, likes: 2140, rating: 4.9, ratingCount: 589, thumbnailColor: GRADIENTS[4], isFree: true, publishedAt: new Date(Date.now() - 10 * 86400000).toISOString(), creator: CREATORS[3] },
+  { id: 'r7', type: 'quiz', title: 'Leaving Cert Chemistry — Organic Chemistry Quiz', description: '20 exam-style questions on organic chemistry with full model answers and mark schemes.', subject: 'Chemistry', level: 'Leaving Cert', category: 'leaving-cert', tags: ['chemistry', 'organic', 'quiz'], views: 5600, likes: 412, rating: 4.7, ratingCount: 98, thumbnailColor: GRADIENTS[6], isFree: true, publishedAt: new Date(Date.now() - 8 * 86400000).toISOString(), creator: CREATORS[2] },
+  { id: 'r8', type: 'guide', title: 'Managing Exam Stress & Study Anxiety', description: 'Practical, science-backed strategies for managing exam pressure and staying mentally strong.', subject: 'Wellbeing', level: 'Both', category: 'wellbeing', tags: ['mental-health', 'stress', 'exams'], wordCount: 3100, views: 18500, likes: 1560, rating: 4.9, ratingCount: 342, thumbnailColor: GRADIENTS[3], isFree: true, publishedAt: new Date(Date.now() - 4 * 86400000).toISOString(), creator: CREATORS[3] },
+]
+
+export default function AcademyPage() {
+  const [category, setCategory] = useState<ContentCategory>('all')
+  const [typeFilter, setTypeFilter] = useState<ContentType | 'all'>('all')
+  const [search, setSearch] = useState('')
+  const [activeResource, setActiveResource] = useState<Resource | null>(null)
+  const [bookmarks, setBookmarks] = useLocalStorage<string[]>('bloom-academy-bookmarks', [])
+  const [watchHistory, setWatchHistory] = useLocalStorage<Record<string, number>>('bloom-watch-progress', {})
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [videoProgress, setVideoProgress] = useState(0)
   const [aiResult, setAiResult] = useState('')
   const [isLoadingAI, setIsLoadingAI] = useState(false)
   const [aiAction, setAiAction] = useState('')
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [playbackSpeed, setPlaybackSpeed] = useState(1)
-  const [videoProgress, setVideoProgress] = useState(0)
-  const [showCreatorDash, setShowCreatorDash] = useState(false)
-  const [watchNotes, setWatchNotes] = useState('')
-  const [showTranscript, setShowTranscript] = useState(false)
-  const [isFullscreen, setIsFullscreen] = useState(false)
-  const [videoBookmarks, setVideoBookmarks] = useState<number[]>([])
-  const [watchHistory, setWatchHistory] = useLocalStorage<Record<string, number>>('bloom-watch-progress', {})
+  const [activeTab, setActiveTab] = useState<'discover' | 'saved' | 'continue'>('discover')
+  const { xp: toastXP } = useToast()
 
-  const filtered = resources.filter(r => {
+  const filtered = useMemo(() => MOCK_RESOURCES.filter(r => {
     if (category !== 'all' && r.category !== category) return false
-    if (contentFilter !== 'all' && r.type !== contentFilter) return false
-    if (searchQuery && !r.title.toLowerCase().includes(searchQuery.toLowerCase()) && !r.subject.toLowerCase().includes(searchQuery.toLowerCase())) return false
+    if (typeFilter !== 'all' && r.type !== typeFilter) return false
     if (activeTab === 'saved' && !bookmarks.includes(r.id)) return false
+    if (activeTab === 'continue' && !watchHistory[r.id]) return false
+    if (search && !r.title.toLowerCase().includes(search.toLowerCase()) && !r.subject.toLowerCase().includes(search.toLowerCase())) return false
     return true
-  })
+  }), [category, typeFilter, search, bookmarks, watchHistory, activeTab])
 
-  const handleBookmark = (id: string) => {
-    setBookmarks(prev => prev.includes(id) ? prev.filter(b => b !== id) : [...prev, id])
+  const inProgress = useMemo(() => MOCK_RESOURCES.filter(r => watchHistory[r.id] && watchHistory[r.id] > 0 && watchHistory[r.id] < 95), [watchHistory])
+
+  const openResource = (r: Resource) => {
+    setActiveResource(r)
+    setVideoProgress(watchHistory[r.id] || 0)
+    setAiResult(''); setAiAction(''); setIsPlaying(false)
+    toastXP(5, `Opened ${r.subject} resource`)
   }
 
-  // Resume watching from saved progress
-  useEffect(() => {
-    if (activeResource) {
-      const saved = watchHistory[activeResource.id]
-      if (saved) setVideoProgress(saved)
-      else setVideoProgress(0)
-      setWatchNotes(''); setShowTranscript(false); setAiResult(''); setIsPlaying(false)
-    }
-  }, [activeResource])
-
-  const handleAIAction = async (action: string, resource: LearnResource) => {
+  const handleAIAction = async (action: string, resource: Resource) => {
     setAiAction(action); setAiResult(''); setIsLoadingAI(true)
     const prompts: Record<string, string> = {
-      summarise: `Summarise this educational resource in 5 bullet points for a student:\n\nTitle: ${resource.title}\n\nDescription: ${resource.description}`,
-      flashcards: `Generate 8 exam-focused flashcard Q&A pairs from this resource:\n\nTitle: ${resource.title}\nSubject: ${resource.subject}\nLevel: ${resource.level}\n\nDescription: ${resource.description}`,
-      quiz: `Create 5 exam-style questions with model answers about:\n\nTitle: ${resource.title}\nSubject: ${resource.subject}\nLevel: ${resource.level}`,
-      notes: `Create structured revision notes from this resource:\n\nTitle: ${resource.title}\nSubject: ${resource.subject}\nDescription: ${resource.description}`,
+      summarise: `Summarise this ${resource.type} resource in 5 bullet points for an Irish student:\n\nTitle: ${resource.title}\n\nDescription: ${resource.description}`,
+      flashcards: `Generate 8 exam-focused flashcard Q&A pairs from:\n\nTitle: ${resource.title}\nSubject: ${resource.subject}\nLevel: ${resource.level}`,
+      quiz: `Create 5 exam-style questions with model answers from:\n\nTitle: ${resource.title}\nSubject: ${resource.subject}`,
+      notes: `Create structured revision notes from:\n\nTitle: ${resource.title}\nSubject: ${resource.subject}\nDescription: ${resource.description}`,
+      explain: `Explain the key concepts from this resource in simple terms for an Irish student:\n\n${resource.title} — ${resource.description}`,
     }
     try {
       const res = await fetch('/api/ai/tutor', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: [{ role: 'user', content: prompts[action] }], subject: resource.subject, level: 'higher', educationSystem: 'leaving-cert' }),
       })
-      if (res.ok) {
-        const reader = res.body?.getReader(); const decoder = new TextDecoder(); let text = ''
-        if (reader) { while (true) { const { done, value } = await reader.read(); if (done) break; const chunk = decoder.decode(value); for (const line of chunk.split('\n')) { if (line.startsWith('data: ') && line.slice(6) !== '[DONE]') { try { text += JSON.parse(line.slice(6)).content || '' } catch {} } } setAiResult(text) } }
-      }
-    } finally { setIsLoadingAI(false) }
+      if (!res.ok) throw new Error()
+      const reader = res.body?.getReader(); const decoder = new TextDecoder(); let text = ''
+      if (reader) { while (true) { const { done, value } = await reader.read(); if (done) break; for (const line of decoder.decode(value).split('\n')) { if (line.startsWith('data: ') && line.slice(6) !== '[DONE]') { try { text += JSON.parse(line.slice(6)).content || '' } catch {} } } setAiResult(text) } }
+    } catch { setAiResult('Failed to load AI response. Please try again.') }
+    finally { setIsLoadingAI(false) }
   }
 
-  const formatDuration = (mins?: number) => mins ? `${mins} min` : ''
-  const formatViews = (v: number) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v.toString()
+  const toggleBookmark = (id: string) => setBookmarks(prev => prev.includes(id) ? prev.filter(b => b !== id) : [...prev, id])
+  const formatViews = (v: number) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v)
+  const formatDuration = (m?: number) => m ? `${m} min` : ''
 
   return (
     <div className="flex h-screen overflow-hidden animate-fade-in">
       {/* Sidebar */}
-      <div className="w-64 shrink-0 border-r border-slate-200 dark:border-slate-800 flex flex-col bg-white/50 dark:bg-slate-900/50 overflow-y-auto">
+      <div className="w-60 shrink-0 border-r border-slate-200 dark:border-slate-800 flex flex-col bg-white dark:bg-slate-950 overflow-y-auto">
         <div className="p-4 border-b border-slate-200 dark:border-slate-800">
           <div className="flex items-center gap-2.5 mb-3">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center shrink-0 shadow-md shadow-primary-500/20">
-              <span className="text-sm" aria-hidden="true">🌸</span>
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center shrink-0">
+              <BookOpen className="w-4 h-4 text-white" />
             </div>
-            <span className="font-display font-bold text-slate-900 dark:text-white">Bloom Learn</span>
+            <span className="font-display font-bold text-slate-900 dark:text-white">Academy</span>
           </div>
           <div className="flex gap-1 p-1 bg-slate-100 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
-            {(['discover', 'saved', 'creator'] as Tab[]).map(t => (
-              <button key={t} onClick={() => setActiveTab(t)}
-                className={cn('flex-1 py-1.5 rounded-lg text-xs font-medium capitalize transition-all', activeTab === t ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-700')}>
+            {(['discover', 'saved', 'continue'] as const).map(t => (
+              <button key={t} onClick={() => setActiveTab(t)} className={cn('flex-1 py-1.5 rounded-lg text-[11px] font-semibold capitalize transition-all', activeTab === t ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300')}>
                 {t}
               </button>
             ))}
           </div>
         </div>
-        <div className="p-3 space-y-1">
+        <div className="p-3 space-y-0.5">
           {CATEGORIES.map(cat => (
-            <button key={cat.key} onClick={() => setCategory(cat.key)}
-              className={cn('w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm transition-all text-left', category === cat.key ? 'bg-primary-100 dark:bg-primary-950/50 text-primary-700 dark:text-primary-400 font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800')}>
-              <span>{cat.emoji}</span>{cat.label}
+            <button key={cat.key} onClick={() => setCategory(cat.key)} className={cn('w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm transition-all text-left', category === cat.key ? 'bg-primary-100 dark:bg-primary-950/50 text-primary-700 dark:text-primary-400 font-semibold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800')}>
+              <span>{cat.emoji}</span><span>{cat.label}</span>
             </button>
           ))}
         </div>
       </div>
 
-      {/* Main content */}
-      <div className="flex-1 flex overflow-hidden">
-        <div className="flex-1 overflow-y-auto">
-          {activeResource ? (
-            // RESOURCE DETAIL VIEW
-            <div className="max-w-4xl mx-auto px-4 py-6">
-              <button onClick={() => setActiveResource(null)} className="flex items-center gap-2 text-sm text-slate-500 hover:text-primary-600 dark:hover:text-primary-400 mb-4 transition-colors">
-                <ArrowLeft className="w-4 h-4" /> Back to Bloom Learn
-              </button>
+      {/* Main */}
+      <div className="flex-1 overflow-y-auto">
+        {activeResource ? (
+          // ── Resource detail view ──────────────────────────
+          <div className="max-w-4xl mx-auto px-4 py-6">
+            <button onClick={() => setActiveResource(null)} className="flex items-center gap-2 text-sm text-slate-500 hover:text-primary-600 dark:hover:text-primary-400 mb-5 transition-colors">
+              <ArrowLeft className="w-4 h-4" /> Back to Academy
+            </button>
 
-              {/* Thumbnail / Video player */}
-              <div className={cn('relative rounded-2xl overflow-hidden mb-6 aspect-video bg-gradient-to-br flex items-center justify-center', activeResource.thumbnailColor, isFullscreen && 'fixed inset-0 z-50 rounded-none')}>
-                <div className="text-center text-white w-full h-full flex flex-col items-center justify-center">
-                  <div className="text-6xl mb-3">{CONTENT_TYPE_INFO[activeResource.type].emoji}</div>
-                  {activeResource.type === 'video' && (
-                    <>
-                      <button onClick={() => setIsPlaying(!isPlaying)} className="w-16 h-16 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-all hover:scale-105">
-                        {isPlaying ? <PauseCircle className="w-10 h-10 text-white" /> : <PlayCircle className="w-10 h-10 text-white" />}
-                      </button>
-                      <div className="absolute bottom-4 left-4 right-4">
-                        <div className="h-1.5 rounded-full bg-white/30 overflow-hidden cursor-pointer relative"
-                          onClick={e => { const r = e.currentTarget.getBoundingClientRect(); const p = ((e.clientX - r.left) / r.width) * 100; setVideoProgress(p); if (activeResource) setWatchHistory(prev => ({ ...prev, [activeResource.id]: p })) }}>
-                          <div className="h-full bg-white transition-all" style={{ width:`${videoProgress}%` }} />
-                          {videoBookmarks.map((b, i) => <div key={i} className="absolute top-0 w-1 h-full bg-amber-400" style={{ left:`${b}%` }} />)}
-                        </div>
-                        <div className="flex items-center justify-between mt-2 text-xs text-white/80">
-                          <div className="flex items-center gap-2">
-                            <button onClick={() => setVideoProgress(p => Math.max(0, p - (10 / (activeResource.duration || 30) * 100)))}><SkipBack className="w-4 h-4" /></button>
-                            <button onClick={() => setIsPlaying(!isPlaying)}>{isPlaying ? <PauseCircle className="w-5 h-5" /> : <PlayCircle className="w-5 h-5" />}</button>
-                            <button onClick={() => setVideoProgress(p => Math.min(100, p + (10 / (activeResource.duration || 30) * 100)))}><SkipForward className="w-4 h-4" /></button>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {[0.75, 1, 1.25, 1.5, 2].map(s => <button key={s} onClick={() => setPlaybackSpeed(s)} className={cn('text-xs', playbackSpeed === s ? 'font-bold' : 'opacity-60')}>{s}x</button>)}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <button onClick={() => setVideoBookmarks(prev => [...prev, videoProgress])} title="Bookmark" className="opacity-80 hover:opacity-100"><Bookmark className="w-4 h-4" /></button>
-                            <button onClick={() => setShowTranscript(!showTranscript)} title="Transcript" className="opacity-80 hover:opacity-100"><MessageSquare className="w-4 h-4" /></button>
-                            <button onClick={() => setIsFullscreen(!isFullscreen)} title="Fullscreen"><Maximize className="w-4 h-4" /></button>
-                          </div>
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Transcript panel */}
-              {showTranscript && (
-                <div className="mb-5 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 max-h-48 overflow-y-auto">
-                  <h4 className="font-semibold text-slate-900 dark:text-white text-sm mb-3 flex items-center gap-2"><MessageSquare className="w-4 h-4 text-primary-500" /> Transcript</h4>
-                  <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed italic">
-                    Welcome to {activeResource.title}. In this {CONTENT_TYPE_INFO[activeResource.type].label.toLowerCase()}, we&apos;ll explore {activeResource.description.toLowerCase()}. This content is specifically designed for {activeResource.level} students preparing for Irish state exams...
-                    <br /><br />
-                    [Full transcript available — click on any paragraph to jump to that point in the video.]
-                  </p>
-                </div>
-              )}
-
-              {/* Notes while watching */}
-              {activeResource.type === 'video' && (
-                <div className="mb-5 p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
-                  <h4 className="font-semibold text-slate-900 dark:text-white text-sm mb-2 flex items-center gap-2">📝 Notes while watching</h4>
-                  <textarea value={watchNotes} onChange={e => setWatchNotes(e.target.value)} rows={3} placeholder="Jot down key points as you watch..." className="w-full px-3 py-2 rounded-xl border border-amber-200 dark:border-amber-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white focus:border-amber-400 focus:outline-none resize-none" />
-                </div>
-              )}
-
-              {/* Resource info */}
-              <div className="flex items-start justify-between gap-4 mb-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className={cn('px-2.5 py-1 rounded-full text-xs font-semibold', CONTENT_TYPE_INFO[activeResource.type].color)}>
-                      {CONTENT_TYPE_INFO[activeResource.type].emoji} {CONTENT_TYPE_INFO[activeResource.type].label}
-                    </span>
-                    <span className="text-xs text-slate-500">{activeResource.level}</span>
-                  </div>
-                  <h1 className="font-display text-2xl font-bold text-slate-900 dark:text-white mb-2">{activeResource.title}</h1>
-                  <p className="text-slate-600 dark:text-slate-400">{activeResource.description}</p>
-                  <div className="flex items-center gap-4 mt-3 text-sm text-slate-500">
-                    <span className="flex items-center gap-1"><Eye className="w-4 h-4" />{formatViews(activeResource.views)}</span>
-                    <span className="flex items-center gap-1"><Heart className="w-4 h-4" />{activeResource.likes}</span>
-                    <span className="flex items-center gap-1"><Star className="w-4 h-4 text-amber-400" />{activeResource.rating}</span>
-                    {activeResource.duration && <span className="flex items-center gap-1"><Clock className="w-4 h-4" />{formatDuration(activeResource.duration)}</span>}
-                  </div>
-                </div>
-                <button onClick={() => handleBookmark(activeResource.id)}
-                  className={cn('p-3 rounded-xl border-2 transition-all', bookmarks.includes(activeResource.id) ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/30 text-primary-600 dark:text-primary-400' : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:border-primary-400')}>
-                  <Bookmark className={cn('w-5 h-5', bookmarks.includes(activeResource.id) && 'fill-current')} />
-                </button>
-              </div>
-
-              {/* Creator */}
-              <div className="flex items-center gap-3 p-4 rounded-xl card mb-5">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-2xl shrink-0">
-                  {activeResource.creator.avatar}
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-semibold text-slate-900 dark:text-white">{activeResource.creator.name}</span>
-                    {activeResource.creator.verified && <Check className="w-4 h-4 text-primary-500" />}
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-primary-100 dark:bg-primary-950/30 text-primary-700 dark:text-primary-400 capitalize">{activeResource.creator.type}</span>
-                  </div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{activeResource.creator.bio.slice(0, 80)}...</p>
-                </div>
-                <div className="text-center">
-                  <div className="font-bold text-slate-900 dark:text-white">{(activeResource.creator.followers / 1000).toFixed(1)}k</div>
-                  <div className="text-xs text-slate-500">followers</div>
-                </div>
-              </div>
-
-              {/* AI Actions */}
-              <div className="p-4 rounded-xl bg-gradient-to-br from-primary-500/10 to-accent-500/10 border border-primary-200 dark:border-primary-800 mb-5">
-                <h3 className="font-semibold text-slate-900 dark:text-white mb-3 flex items-center gap-2 text-sm">
-                  <Sparkles className="w-4 h-4 text-primary-500" /> Bloom AI — Learn Smarter
-                </h3>
-                <div className="flex flex-wrap gap-2 mb-3">
-                  {[
-                    { action: 'summarise', label: '📝 Summarise', },
-                    { action: 'flashcards', label: '🃏 Flashcards', },
-                    { action: 'quiz', label: '❓ Quiz', },
-                    { action: 'notes', label: '📋 Revision Notes', },
-                  ].map(({ action, label }) => (
-                    <button key={action} onClick={() => handleAIAction(action, activeResource)} disabled={isLoadingAI}
-                      className={cn('px-4 py-2 rounded-xl text-sm font-medium border-2 transition-all', aiAction === action && aiResult ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/30 text-primary-600 dark:text-primary-400' : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-primary-400 disabled:opacity-50')}>
-                      {isLoadingAI && aiAction === action ? '...' : label}
+            {/* Thumbnail / player */}
+            <div className={cn('relative rounded-2xl overflow-hidden mb-6 aspect-video bg-gradient-to-br flex items-center justify-center text-white', activeResource.thumbnailColor)}>
+              <div className="text-center">
+                <div className="text-6xl mb-3">{(TYPE_INFO as any)[activeResource.type]?.emoji}</div>
+                {activeResource.type === 'video' && (
+                  <>
+                    <button onClick={() => setIsPlaying(!isPlaying)} className="w-16 h-16 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-all hover:scale-105">
+                      {isPlaying ? <PauseCircle className="w-10 h-10" /> : <PlayCircle className="w-10 h-10" />}
                     </button>
+                    <div className="absolute bottom-4 left-4 right-4">
+                      <div className="h-1.5 rounded-full bg-white/30 cursor-pointer" onClick={e => { const r = e.currentTarget.getBoundingClientRect(); const p = ((e.clientX - r.left) / r.width) * 100; setVideoProgress(p); setWatchHistory(prev => ({ ...prev, [activeResource.id]: p })) }}>
+                        <div className="h-full bg-white rounded-full transition-all" style={{ width: `${videoProgress}%` }} />
+                      </div>
+                      <div className="flex items-center justify-between mt-2 text-xs text-white/70">
+                        <div className="flex gap-2"><SkipBack className="w-4 h-4 cursor-pointer" /><SkipForward className="w-4 h-4 cursor-pointer" /></div>
+                        <span>{formatDuration(activeResource.duration)}</span>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Info */}
+            <div className="flex items-start justify-between gap-4 mb-4 flex-wrap">
+              <div className="flex-1 min-w-0">
+                <span className={cn('badge text-xs mb-2 inline-flex', (TYPE_INFO as any)[activeResource.type]?.color)}>{(TYPE_INFO as any)[activeResource.type]?.emoji} {(TYPE_INFO as any)[activeResource.type]?.label}</span>
+                <h1 className="font-display text-2xl font-bold text-slate-900 dark:text-white mb-2">{activeResource.title}</h1>
+                <p className="text-slate-600 dark:text-slate-400 text-sm">{activeResource.description}</p>
+                <div className="flex items-center gap-4 mt-3 text-xs text-slate-500">
+                  <span className="flex items-center gap-1"><Eye className="w-3.5 h-3.5" />{formatViews(activeResource.views)}</span>
+                  <span className="flex items-center gap-1"><Star className="w-3.5 h-3.5 text-amber-400" />{activeResource.rating}</span>
+                  <span className="flex items-center gap-1"><Heart className="w-3.5 h-3.5" />{activeResource.likes}</span>
+                  {activeResource.duration && <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{formatDuration(activeResource.duration)}</span>}
+                </div>
+              </div>
+              <button onClick={() => toggleBookmark(activeResource.id)} className={cn('p-3 rounded-xl border-2 transition-all shrink-0', bookmarks.includes(activeResource.id) ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/30 text-primary-600 dark:text-primary-400' : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:border-primary-400')}>
+                <Bookmark className={cn('w-5 h-5', bookmarks.includes(activeResource.id) && 'fill-current')} />
+              </button>
+            </div>
+
+            {/* Creator */}
+            <div className="flex items-center gap-3 p-4 rounded-xl card mb-5">
+              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-xl shrink-0">{activeResource.creator.avatar}</div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5"><span className="font-semibold text-slate-900 dark:text-white text-sm">{activeResource.creator.name}</span>{activeResource.creator.verified && <Check className="w-4 h-4 text-primary-500" />}<span className="text-xs px-2 py-0.5 rounded-full bg-primary-100 dark:bg-primary-950/30 text-primary-700 dark:text-primary-400 capitalize">{activeResource.creator.type}</span></div>
+                <p className="text-xs text-slate-500 mt-0.5">{(activeResource.creator.followers / 1000).toFixed(1)}k followers</p>
+              </div>
+            </div>
+
+            {/* Bloom AI panel */}
+            <div className="p-4 rounded-xl bg-gradient-to-br from-primary-500/10 to-accent-500/10 border border-primary-200 dark:border-primary-800 mb-5">
+              <h3 className="font-semibold text-slate-900 dark:text-white mb-3 flex items-center gap-2 text-sm"><Sparkles className="w-4 h-4 text-primary-500" /> Bloom AI — Learn Smarter</h3>
+              <div className="flex flex-wrap gap-2 mb-3">
+                {[{ action: 'summarise', label: '📝 Summarise' }, { action: 'flashcards', label: '🃏 Flashcards' }, { action: 'quiz', label: '❓ Quiz' }, { action: 'notes', label: '📋 Notes' }, { action: 'explain', label: '💡 Explain' }].map(({ action, label }) => (
+                  <button key={action} onClick={() => handleAIAction(action, activeResource)} disabled={isLoadingAI}
+                    className={cn('px-3 py-1.5 rounded-lg text-xs font-semibold border-2 transition-all disabled:opacity-50', aiAction === action && aiResult ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/30 text-primary-600 dark:text-primary-400' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-primary-400')}>
+                    {isLoadingAI && aiAction === action ? <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin inline-block" /> : label}
+                  </button>
+                ))}
+              </div>
+              {aiResult && <div className="rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4 max-h-80 overflow-y-auto text-sm"><MarkdownRenderer content={aiResult} /></div>}
+            </div>
+
+            {/* Article content */}
+            {(['article', 'notes', 'guide', 'sample-answer'] as ContentType[]).includes(activeResource.type) && (
+              <div className="p-6 rounded-2xl card">
+                <MarkdownRenderer content={activeResource.content || `# ${activeResource.title}\n\n${activeResource.description}\n\n*Full content would appear here. Connect to your database to display real content.*`} />
+              </div>
+            )}
+          </div>
+        ) : (
+          // ── Resource list view ────────────────────────────
+          <div className="px-4 py-6">
+            <div className="flex items-start justify-between mb-5 flex-wrap gap-3">
+              <div>
+                <h1 className="section-heading">
+                  {activeTab === 'discover' ? `${CATEGORIES.find(c => c.key === category)?.emoji || '🌟'} ${CATEGORIES.find(c => c.key === category)?.label || 'Discover'}` : activeTab === 'saved' ? '🔖 Saved' : '▶️ Continue Watching'}
+                </h1>
+                <p className="text-slate-500 dark:text-slate-400 text-sm mt-0.5">Ireland's best free educational resources</p>
+              </div>
+            </div>
+
+            {/* Search + type filter */}
+            <div className="flex items-center gap-3 mb-4 flex-wrap">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search subjects, teachers, topics…" className="input pl-10 text-sm" />
+              </div>
+              <div className="flex gap-1 overflow-x-auto scrollbar-hide">
+                {(['all', 'video', 'article', 'notes', 'guide', 'podcast', 'quiz'] as const).map(f => (
+                  <button key={f} onClick={() => setTypeFilter(f as any)} className={cn('px-3 py-2 rounded-xl text-xs font-semibold capitalize whitespace-nowrap transition-all shrink-0', typeFilter === f ? 'bg-primary-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700')}>
+                    {f === 'all' ? '🌟 All' : `${(TYPE_INFO as any)[f]?.emoji || ''} ${(TYPE_INFO as any)[f]?.label || f}`}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Continue watching strip */}
+            {activeTab === 'discover' && inProgress.length > 0 && (
+              <div className="mb-6">
+                <h3 className="font-semibold text-slate-900 dark:text-white mb-3 flex items-center gap-2 text-sm"><Clock className="w-4 h-4 text-primary-500" /> Continue Watching</h3>
+                <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+                  {inProgress.map(r => (
+                    <div key={r.id} onClick={() => openResource(r)} className="shrink-0 w-44 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden cursor-pointer hover:shadow-lg transition-all group">
+                      <div className={cn('h-20 bg-gradient-to-br flex items-center justify-center text-3xl', r.thumbnailColor)}>{(TYPE_INFO as any)[r.type]?.emoji}</div>
+                      <div className="h-1 bg-slate-200 dark:bg-slate-700"><div className="h-full bg-primary-500" style={{ width: `${watchHistory[r.id]}%` }} /></div>
+                      <div className="p-2"><p className="text-xs font-medium text-slate-900 dark:text-white line-clamp-2 group-hover:text-primary-600 dark:group-hover:text-primary-400">{r.title}</p></div>
+                    </div>
                   ))}
                 </div>
-                {aiResult && (
-                  <div className="rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4 max-h-80 overflow-y-auto">
-                    <MarkdownRenderer content={aiResult} />
-                  </div>
-                )}
               </div>
+            )}
 
-              {/* Article content */}
-              {(activeResource.type === 'article' || activeResource.type === 'notes' || activeResource.type === 'guide') && (
-                <div className="p-6 rounded-2xl card">
-                  <MarkdownRenderer content={activeResource.articleContent || `# ${activeResource.title}\n\n${activeResource.description}\n\n*Full content would appear here in production.*`} />
-                </div>
-              )}
-            </div>
-          ) : (
-            // RESOURCE LIST VIEW
-            <div className="px-4 py-6">
-              {/* Header */}
-              <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
-                <div>
-                  <h1 className="font-display text-2xl font-bold text-slate-900 dark:text-white">
-                    {activeTab === 'discover' ? '🌟 Discover' : activeTab === 'saved' ? '🔖 Saved' : '✍️ Creator Dashboard'}
-                  </h1>
-                  <p className="text-slate-500 text-sm mt-0.5">
-                    {activeTab === 'discover' ? "Ireland's best free educational resources" : activeTab === 'saved' ? `${bookmarks.length} saved resources` : 'Publish and manage your content'}
-                  </p>
-                </div>
-                {activeTab === 'creator' && (
-                  <button className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-primary-600 to-accent-500 text-white text-sm font-semibold hover:shadow-lg transition-all">
-                    <Plus className="w-4 h-4" /> Publish Resource
-                  </button>
-                )}
+            {/* Grid */}
+            {filtered.length === 0 ? (
+              <div className="text-center py-16 text-slate-400"><BookOpen className="w-12 h-12 mx-auto mb-3 opacity-30" /><p>{activeTab === 'saved' ? 'No saved resources yet.' : 'No resources found.'}</p></div>
+            ) : (
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 stagger-children">
+                {filtered.map(r => (
+                  <div key={r.id} onClick={() => openResource(r)} className="group card card-hover cursor-pointer overflow-hidden flex flex-col animate-fade-in-up">
+                    <div className={cn('relative h-32 bg-gradient-to-br flex items-center justify-center text-4xl', r.thumbnailColor)}>
+                      {(TYPE_INFO as any)[r.type]?.emoji}
+                      <button onClick={e => { e.stopPropagation(); toggleBookmark(r.id) }} className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/20 hover:bg-black/40 text-white transition-colors">
+                        <Bookmark className={cn('w-3.5 h-3.5', bookmarks.includes(r.id) && 'fill-current')} />
+                      </button>
+                      {r.duration && <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/50 text-white text-xs">{formatDuration(r.duration)}</div>}
+                      {watchHistory[r.id] > 0 && <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/20"><div className="h-full bg-white" style={{ width: `${watchHistory[r.id]}%` }} /></div>}
+                    </div>
+                    <div className="p-3 flex flex-col flex-1">
+                      <span className={cn('badge text-[11px] mb-1.5 w-fit', (TYPE_INFO as any)[r.type]?.color)}>{(TYPE_INFO as any)[r.type]?.label}</span>
+                      <h3 className="font-semibold text-slate-900 dark:text-white text-sm line-clamp-2 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors flex-1">{r.title}</h3>
+                      <div className="flex items-center gap-1.5 mt-2">
+                        <div className="w-5 h-5 rounded-full bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-[11px] shrink-0">{r.creator.avatar}</div>
+                        <span className="text-xs text-slate-500 dark:text-slate-400 truncate">{r.creator.name}</span>
+                        {r.creator.verified && <Check className="w-3 h-3 text-primary-500 shrink-0" />}
+                      </div>
+                      <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-400">
+                        <span className="flex items-center gap-1"><Eye className="w-3 h-3" />{formatViews(r.views)}</span>
+                        <span className="flex items-center gap-1"><Star className="w-3 h-3 text-amber-400" />{r.rating}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
-
-              {activeTab === 'creator' ? (
-                <CreatorDashboard />
-              ) : (
-                <>
-                  {/* Search + type filter */}
-                  <div className="flex items-center gap-3 mb-4 flex-wrap">
-                    <div className="relative flex-1 min-w-[200px]">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                      <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search resources, subjects, teachers..."
-                        className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white focus:border-primary-500 focus:outline-none" />
-                    </div>
-                    <div className="flex gap-1 overflow-x-auto">
-                      {CONTENT_FILTERS.slice(0, 6).map(f => (
-                        <button key={f} onClick={() => setContentFilter(f)}
-                          className={cn('px-3 py-2 rounded-xl text-xs font-medium capitalize whitespace-nowrap transition-all', contentFilter === f ? 'bg-primary-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700')}>
-                          {f === 'all' ? '🌟 All' : `${CONTENT_TYPE_INFO[f as ContentType].emoji} ${CONTENT_TYPE_INFO[f as ContentType].label}`}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Continue watching */}
-                  {activeTab === 'discover' && Object.keys(watchHistory).length > 0 && (() => {
-                    const inProgress = resources.filter(r => watchHistory[r.id] && watchHistory[r.id] > 0 && watchHistory[r.id] < 95)
-                    if (!inProgress.length) return null
-                    return (
-                      <div className="mb-6">
-                        <h3 className="font-semibold text-slate-900 dark:text-white mb-3 flex items-center gap-2 text-sm"><Clock className="w-4 h-4 text-primary-500" /> Continue Watching</h3>
-                        <div className="flex gap-3 overflow-x-auto pb-2">
-                          {inProgress.map(r => (
-                            <div key={r.id} onClick={() => setActiveResource(r)} className="shrink-0 w-48 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden cursor-pointer hover:shadow-lg transition-all group">
-                              <div className={cn('h-24 bg-gradient-to-br flex items-center justify-center text-3xl', r.thumbnailColor)}>{CONTENT_TYPE_INFO[r.type].emoji}</div>
-                              <div className="h-1 bg-slate-200 dark:bg-slate-700"><div className="h-full bg-primary-500" style={{ width:`${watchHistory[r.id]}%` }} /></div>
-                              <div className="p-2"><p className="text-xs font-medium text-slate-900 dark:text-white line-clamp-2 group-hover:text-primary-600 dark:group-hover:text-primary-400">{r.title}</p></div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )
-                  })()}
-
-                  {/* Smart recommendations */}
-                  {activeTab === 'discover' && searchQuery === '' && category === 'all' && contentFilter === 'all' && (
-                    <div className="mb-4 p-4 rounded-xl bg-gradient-to-r from-primary-50 to-accent-50 dark:from-primary-950/20 dark:to-accent-950/20 border border-primary-200 dark:border-primary-800">
-                      <h3 className="font-semibold text-slate-900 dark:text-white mb-1 flex items-center gap-2 text-sm"><Sparkles className="w-4 h-4 text-primary-500" /> Recommended for you</h3>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">Based on your bookmarks, recent activity, and exam countdown</p>
-                    </div>
-                  )}
-
-                  {/* Resource grid */}
-                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {filtered.map(resource => (
-                      <ResourceCard key={resource.id} resource={resource} bookmarked={bookmarks.includes(resource.id)}
-                        onOpen={setActiveResource} onBookmark={handleBookmark} formatViews={formatViews} formatDuration={formatDuration} />
-                    ))}
-                    {filtered.length === 0 && (
-                      <div className="col-span-3 text-center py-16 text-slate-400">
-                        <BookOpen className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                        <p>{activeTab === 'saved' ? 'No saved resources yet. Bookmark resources to find them here.' : 'No resources found.'}</p>
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function ResourceCard({ resource, bookmarked, onOpen, onBookmark, formatViews, formatDuration }: {
-  resource: LearnResource; bookmarked: boolean
-  onOpen: (r: LearnResource) => void
-  onBookmark: (id: string) => void
-  formatViews: (v: number) => string
-  formatDuration: (m?: number) => string
-}) {
-  const typeInfo = CONTENT_TYPE_INFO[resource.type]
-  return (
-    <div className="group rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 hover:shadow-xl hover:border-primary-300 dark:hover:border-primary-700 transition-all overflow-hidden cursor-pointer"
-      onClick={() => onOpen(resource)}>
-      {/* Thumbnail */}
-      <div className={cn('relative h-36 bg-gradient-to-br flex items-center justify-center', resource.thumbnailColor)}>
-        <div className="text-5xl">{typeInfo.emoji}</div>
-        {resource.progress !== undefined && resource.progress > 0 && (
-          <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/20">
-            <div className="h-full bg-white transition-all" style={{ width: `${resource.progress}%` }} />
-          </div>
-        )}
-        <button onClick={e => { e.stopPropagation(); onBookmark(resource.id) }}
-          className="absolute top-3 right-3 p-2 rounded-lg bg-black/20 hover:bg-black/40 text-white transition-colors">
-          <Bookmark className={cn('w-4 h-4', bookmarked && 'fill-current')} />
-        </button>
-        {resource.duration && (
-          <div className="absolute bottom-3 right-3 px-2 py-0.5 rounded-lg bg-black/50 text-white text-xs font-medium">
-            {formatDuration(resource.duration)}
+            )}
           </div>
         )}
       </div>
-      {/* Info */}
-      <div className="p-4">
-        <div className="flex items-center gap-2 mb-2">
-          <span className={cn('px-2 py-0.5 rounded-full text-xs font-semibold', typeInfo.color)}>{typeInfo.label}</span>
-          <span className="text-xs text-slate-400 truncate">{resource.level}</span>
-        </div>
-        <h3 className="font-semibold text-slate-900 dark:text-white text-sm mb-1 line-clamp-2 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">{resource.title}</h3>
-        <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 mb-3">{resource.description}</p>
-        <div className="flex items-center gap-1.5">
-          <div className="w-5 h-5 rounded-full bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-xs shrink-0">
-            {resource.creator.avatar}
-          </div>
-          <span className="text-xs text-slate-500 dark:text-slate-400 flex-1 truncate">{resource.creator.name}</span>
-          {resource.creator.verified && <Check className="w-3 h-3 text-primary-500 shrink-0" />}
-        </div>
-        <div className="flex items-center gap-3 mt-2 text-xs text-slate-400">
-          <span className="flex items-center gap-1"><Eye className="w-3 h-3" />{formatViews(resource.views)}</span>
-          <span className="flex items-center gap-1"><Star className="w-3 h-3 text-amber-400" />{resource.rating}</span>
-          <span className="flex items-center gap-1"><Heart className="w-3 h-3" />{resource.likes}</span>
-        </div>
-      </div>
     </div>
   )
 }
-
-function CreatorDashboard() {
-  return (
-    <div className="space-y-5 max-w-3xl">
-      <div className="grid sm:grid-cols-3 gap-4">
-        {[{ label: 'Total Views', value: '—', icon: Eye, color: 'from-blue-500 to-indigo-600' }, { label: 'Followers', value: '—', icon: Users, color: 'from-primary-500 to-accent-500' }, { label: 'Resources', value: '0', icon: BookOpen, color: 'from-emerald-500 to-teal-600' }].map(s => (
-          <div key={s.label} className="p-4 rounded-xl card text-center">
-            <div className={cn('w-10 h-10 rounded-xl bg-gradient-to-br flex items-center justify-center mx-auto mb-2', s.color)}>
-              <s.icon className="w-5 h-5 text-white" />
-            </div>
-            <div className="font-display font-bold text-2xl text-slate-900 dark:text-white">{s.value}</div>
-            <div className="text-xs text-slate-500 mt-0.5">{s.label}</div>
-          </div>
-        ))}
-      </div>
-      <div className="p-6 rounded-2xl card text-center">
-        <div className="text-4xl mb-3">✍️</div>
-        <h3 className="font-display text-xl font-bold text-slate-900 dark:text-white mb-2">Become a Creator</h3>
-        <p className="text-slate-500 dark:text-slate-400 text-sm mb-4 max-w-sm mx-auto">Verified teachers and tutors can publish resources, articles, videos, and guides to help thousands of Irish students.</p>
-        <button className="px-6 py-3 rounded-xl bg-gradient-to-r from-primary-600 to-accent-500 text-white font-semibold hover:shadow-lg transition-all inline-flex items-center gap-2">
-          <Sparkles className="w-4 h-4" /> Apply for Creator Access
-        </button>
-        <p className="text-xs text-slate-400 mt-3">Free for verified teachers · Analytics included · Premium creator tools coming soon</p>
-      </div>
-    </div>
-  )
-}
-
-
-
-

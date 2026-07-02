@@ -4,13 +4,16 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import {
   Send, Sparkles, BookOpen, User, Upload, FileText,
   Image as ImageIcon, Brain, Layers, FileCheck, AlignLeft,
-  ChevronDown, X, Plus, Zap, Crown
+  ChevronDown, X, Plus, Zap, Crown, Search, MessageSquare,
+  Trash2, Edit2
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import MarkdownRenderer from '@/components/ui/MarkdownRenderer'
 import { useSubscription } from '@/components/SubscriptionProvider'
 import UpgradePrompt from '@/components/ui/UpgradePrompt'
 import { useToast } from '@/components/ui/Toast'
+import { createClient } from '@/lib/supabase/client'
+import { getConversations, createConversation, addMessage, updateConversationTitle, deleteConversation, getMessages } from '@/lib/database/conversations'
 
 interface Message {
   id: string
@@ -26,6 +29,14 @@ interface Attachment {
   type: 'pdf' | 'image' | 'text'
   content: string
   preview?: string
+}
+
+interface Conversation {
+  id: string
+  title: string
+  subject?: string
+  created_at: string
+  updated_at: string
 }
 
 const SUBJECTS = [
@@ -53,6 +64,11 @@ const STARTER_PROMPTS = [
 ]
 
 export default function AITutorPage() {
+  const supabase = createClient()
+  const [conversations, setConversations] = useState<Conversation[]>([])
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null)
+  const [showConversationSidebar, setShowConversationSidebar] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -92,6 +108,98 @@ Here's what I can do for you:
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    loadConversations()
+  }, [])
+
+  const loadConversations = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const convs = await getConversations(user.id)
+      setConversations(convs)
+    } catch (error) {
+      console.error('Error loading conversations:', error)
+    }
+  }
+
+  const createNewConversation = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const newConv = await createConversation(user.id, 'New Conversation', selectedSubject)
+      setConversations(prev => [newConv, ...prev])
+      setCurrentConversationId(newConv.id)
+      setMessages([
+        {
+          id: '1',
+          role: 'assistant',
+          content: `# Welcome to Bloom AI Tutor! 🌸
+
+I'm your personal AI teacher, here to help you ace your **Junior Cycle** and **Leaving Certificate** exams.
+
+**To get started**, select your subject and exam level above, then ask me anything!`,
+          timestamp: new Date(),
+        }
+      ])
+    } catch (error) {
+      console.error('Error creating conversation:', error)
+    }
+  }
+
+  const loadConversation = async (conversationId: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const conv = conversations.find(c => c.id === conversationId)
+      if (!conv) return
+
+      setCurrentConversationId(conversationId)
+      setSelectedSubject(conv.subject || '')
+      
+      // Load messages for this conversation
+      const messagesData = await getMessages(conversationId)
+      
+      const loadedMessages: Message[] = messagesData.map(m => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        timestamp: new Date(m.created_at),
+      }))
+
+      setMessages(loadedMessages.length > 0 ? loadedMessages : [
+        {
+          id: '1',
+          role: 'assistant',
+          content: `# Welcome to Bloom AI Tutor! 🌸
+
+I'm your personal AI teacher, here to help you ace your **Junior Cycle** and **Leaving Certificate** exams.
+
+**To get started**, select your subject and exam level above, then ask me anything!`,
+          timestamp: new Date(),
+        }
+      ])
+    } catch (error) {
+      console.error('Error loading conversation:', error)
+    }
+  }
+
+  const deleteConversationHandler = async (conversationId: string) => {
+    try {
+      await deleteConversation(conversationId)
+      setConversations(prev => prev.filter(c => c.id !== conversationId))
+      if (currentConversationId === conversationId) {
+        setCurrentConversationId(null)
+        createNewConversation()
+      }
+    } catch (error) {
+      console.error('Error deleting conversation:', error)
+    }
+  }
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -178,6 +286,12 @@ Here's what I can do for you:
     }
     incrementUsage('aiMessagesToday')
 
+    // Create new conversation if none exists
+    if (!currentConversationId) {
+      await createNewConversation()
+      return
+    }
+
     // Build full content including attachments
     let fullContent = content
     if (attachments.length > 0) {
@@ -217,6 +331,20 @@ Here's what I can do for you:
     }
 
     try {
+      // Save user message to database
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user && currentConversationId) {
+        await addMessage(currentConversationId, user.id, 'user', fullContent)
+        
+        // Update conversation title if it's the first message
+        const conv = conversations.find(c => c.id === currentConversationId)
+        if (conv && conv.title === 'New Conversation') {
+          const title = content.slice(0, 50) + (content.length > 50 ? '...' : '')
+          await updateConversationTitle(currentConversationId, title)
+          setConversations(prev => prev.map(c => c.id === currentConversationId ? { ...c, title } : c))
+        }
+      }
+
       abortRef.current = new AbortController()
 
       // Build message history for the API
@@ -284,6 +412,12 @@ Here's what I can do for you:
             : m
         )
       )
+
+      // Save assistant message to database
+      if (user && currentConversationId) {
+        await addMessage(currentConversationId, user.id, 'assistant', accumulated)
+      }
+
       // Award XP for each AI interaction
       const msgCount = messages.filter(m => m.role === 'user').length + 1
       if (msgCount === 1) toastAchievement('First Question Asked!', '🧠')
@@ -303,7 +437,7 @@ Here's what I can do for you:
     } finally {
       setIsLoading(false)
     }
-  }, [input, attachments, messages, selectedSubject, selectedLevel, selectedSystem, isLoading])
+  }, [input, attachments, messages, selectedSubject, selectedLevel, selectedSystem, isLoading, currentConversationId, conversations, supabase])
 
   const handleQuickAction = (action: string) => {
     const topic = selectedSubject
@@ -324,26 +458,119 @@ Here's what I can do for you:
   return (
     <div className="flex flex-col h-screen overflow-hidden">
       {showUpgrade && <UpgradePrompt feature="Unlimited AI Messages" description="You've used all 10 free messages today. Upgrade for unlimited access." onDismiss={() => setShowUpgrade(false)} />}
-      {/* Header */}
-      <div className="shrink-0 px-4 sm:px-6 pt-4 pb-3 border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-950/90 backdrop-blur-sm">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center shrink-0 shadow-md shadow-primary-500/20">
-              <Sparkles className="w-5 h-5 text-white" />
+      
+      {/* Conversation Sidebar */}
+      {showConversationSidebar && (
+        <div className="fixed inset-0 z-50 lg:relative lg:w-72 lg:shrink-0 lg:border-r lg:border-slate-200 dark:lg:border-slate-800 lg:bg-white dark:lg:bg-slate-950">
+          <div className="h-full flex flex-col bg-white dark:bg-slate-950 lg:bg-transparent">
+            {/* Sidebar Header */}
+            <div className="shrink-0 p-4 border-b border-slate-200 dark:border-slate-800">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="font-display font-bold text-slate-900 dark:text-white">Conversations</h2>
+                <button
+                  onClick={() => setShowConversationSidebar(false)}
+                  className="lg:hidden p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+                >
+                  <X className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+                </button>
+              </div>
+              
+              {/* Search */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search conversations..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+              
+              {/* New Conversation Button */}
+              <button
+                onClick={createNewConversation}
+                className="mt-3 w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-semibold rounded-lg bg-gradient-to-r from-primary-500 to-accent-500 text-white hover:shadow-md transition-shadow"
+              >
+                <Plus className="w-4 h-4" />
+                New Conversation
+              </button>
             </div>
-            <div className="min-w-0">
-              <h1 className="font-display text-lg font-bold text-slate-900 dark:text-white leading-none">Bloom AI Tutor</h1>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Your personal Irish exam teacher
-                {!isPremium && (
-                  <span className="ml-2 text-amber-600 dark:text-amber-400">
-                    {usage.aiMessagesToday}/{limits.aiMessagesPerDay} today ·{' '}
-                    <button onClick={() => setShowUpgrade(true)} className="underline hover:no-underline focus-visible:ring-1">Upgrade</button>
-                  </span>
-                )}
-              </p>
+            
+            {/* Conversation List */}
+            <div className="flex-1 overflow-y-auto p-2 space-y-1">
+              {conversations
+                .filter(c => c.title.toLowerCase().includes(searchQuery.toLowerCase()))
+                .map((conv) => (
+                  <div
+                    key={conv.id}
+                    className={cn(
+                      'group relative p-3 rounded-lg cursor-pointer transition-colors',
+                      currentConversationId === conv.id
+                        ? 'bg-primary-50 dark:bg-primary-950/30'
+                        : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                    )}
+                    onClick={() => {
+                      loadConversation(conv.id)
+                      setShowConversationSidebar(false)
+                    }}
+                  >
+                    <p className="font-medium text-sm text-slate-900 dark:text-white truncate">{conv.title}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                      {new Date(conv.updated_at).toLocaleDateString()}
+                    </p>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        deleteConversationHandler(conv.id)
+                      }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-red-50 dark:hover:bg-red-950/30 text-red-600 dark:text-red-400 transition-opacity"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              
+              {conversations.length === 0 && (
+                <div className="text-center py-8">
+                  <MessageSquare className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+                  <p className="text-sm text-slate-500 dark:text-slate-400">No conversations yet</p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Start a new conversation to get started</p>
+                </div>
+              )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Header */}
+        <div className="shrink-0 px-4 sm:px-6 pt-4 pb-3 border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-950/90 backdrop-blur-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <button
+                onClick={() => setShowConversationSidebar(true)}
+                className="lg:hidden p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                <MessageSquare className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+              </button>
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center shrink-0 shadow-md shadow-primary-500/20">
+                <Sparkles className="w-5 h-5 text-white" />
+              </div>
+              <div className="min-w-0">
+                <h1 className="font-display text-lg font-bold text-slate-900 dark:text-white leading-none">Bloom AI Tutor</h1>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Your personal Irish exam teacher
+                  {!isPremium && (
+                    <span className="ml-2 text-amber-600 dark:text-amber-400">
+                      {usage.aiMessagesToday}/{limits.aiMessagesPerDay} today ·{' '}
+                      <button onClick={() => setShowUpgrade(true)} className="underline hover:no-underline focus-visible:ring-1">Upgrade</button>
+                    </span>
+                  )}
+                </p>
+              </div>
+            </div>
 
           {/* Context selectors */}
           <div className="flex items-center gap-2 sm:ml-auto flex-wrap">
@@ -623,6 +850,7 @@ Here's what I can do for you:
           Bloom AI can make mistakes. Verify important exam info with your teacher.
         </p>
       </div>
+    </div>
     </div>
   )
 }

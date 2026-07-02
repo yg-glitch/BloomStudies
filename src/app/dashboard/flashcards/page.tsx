@@ -8,8 +8,9 @@ import {
   Flame, BookOpen, Zap, Settings, Trash2, Eye, EyeOff
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useLocalStorage } from '@/lib/useLocalStorage'
 import { useToast } from '@/components/ui/Toast'
+import { createClient } from '@/lib/supabase/client'
+import { getFlashcards, createFlashcard, updateFlashcard, deleteFlashcard, reviewFlashcard, getDueFlashcards, getFlashcardDecks, getFlashcardsByDeck, createFlashcardDeck, deleteFlashcardDeck } from '@/lib/database/flashcards'
 
 interface Flashcard {
   id: string
@@ -17,7 +18,6 @@ interface Flashcard {
   back: string
   subject: string
   difficulty: 'easy' | 'medium' | 'hard'
-  tags: string[]
   mastery: number        // 0-100
   nextReview: string     // ISO date string
   reviewCount: number
@@ -69,7 +69,9 @@ function sm2(card: Flashcard, rating: 0 | 1 | 2 | 3 | 4 | 5): Partial<Flashcard>
 }
 
 export default function FlashcardsPage() {
-  const [decks, setDecks, , decksLoaded] = useLocalStorage<StudyDeck[]>('bloom-flashcard-decks', [])
+  const supabase = createClient()
+  const [decks, setDecks] = useState<StudyDeck[]>([])
+  const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<Tab>('decks')
   const [activeDeck, setActiveDeck] = useState<StudyDeck | null>(null)
   const [studyMode, setStudyMode] = useState<StudyMode>('flashcard')
@@ -89,6 +91,52 @@ export default function FlashcardsPage() {
   const [cardCount, setCardCount] = useState(15)
   const [isUploadingFile, setIsUploadingFile] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Load decks from Supabase on mount
+  useEffect(() => {
+    loadDecks()
+  }, [])
+
+  const loadDecks = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const deckData = await getFlashcardDecks(user.id)
+      const decksWithCards: StudyDeck[] = []
+
+      for (const deck of deckData) {
+        const cards = await getFlashcardsByDeck(deck.id)
+        decksWithCards.push({
+          id: deck.id,
+          title: deck.title,
+          subject: deck.subject || 'General',
+          createdAt: deck.created_at,
+          flashcards: cards.map(c => ({
+            id: c.id,
+            front: c.front,
+            back: c.back,
+            subject: c.subject || deck.subject || 'General',
+            difficulty: c.difficulty,
+            mastery: c.mastery,
+            nextReview: c.next_review_date || new Date().toISOString(),
+            reviewCount: c.review_count,
+            easeFactor: c.ease_factor,
+            interval: c.interval,
+          })),
+          multipleChoice: [],
+          trueFalse: [],
+          fillInBlanks: [],
+        })
+      }
+
+      setDecks(decksWithCards)
+    } catch (error) {
+      console.error('Error loading decks:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   // Build spaced repetition queue — cards due today first, then by mastery
   useEffect(() => {
@@ -145,6 +193,9 @@ export default function FlashcardsPage() {
     if (!uploadText.trim()) { setGenerateError('Please add some content first.'); return }
     setIsGenerating(true); setGenerateError('')
     try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('You must be logged in')
+
       const res = await fetch('/api/ai/flashcards', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -152,19 +203,47 @@ export default function FlashcardsPage() {
       })
       if (!res.ok) throw new Error((await res.json()).error)
       const data = await res.json()
+
+      // Create deck in Supabase
+      const newDeck = await createFlashcardDeck(user.id, data.title, data.subject)
+      if (!newDeck) throw new Error('Failed to create deck')
+
+      // Create flashcards in Supabase
+      const createdCards = await Promise.all(
+        data.flashcards.map((f: any) =>
+          createFlashcard(user.id, {
+            deck_id: newDeck.id,
+            subject: data.subject,
+            front: f.front,
+            back: f.back,
+            difficulty: 'medium',
+            next_review_date: new Date().toISOString(),
+          })
+        )
+      )
+
       const deck: StudyDeck = {
-        id: Date.now().toString(),
-        title: data.title,
-        subject: data.subject,
-        createdAt: new Date().toISOString(),
-        flashcards: data.flashcards.map((f: any) => ({
-          ...f, mastery: 0, nextReview: new Date().toISOString(),
-          reviewCount: 0, easeFactor: 2.5, interval: 1,
+        id: newDeck.id,
+        title: newDeck.title,
+        subject: newDeck.subject || 'General',
+        createdAt: newDeck.created_at,
+        flashcards: createdCards.filter((c): c is NonNullable<typeof c> => c !== null).map(c => ({
+          id: c.id,
+          front: c.front,
+          back: c.back,
+          subject: c.subject || 'General',
+          difficulty: c.difficulty,
+          mastery: c.mastery,
+          nextReview: c.next_review_date || new Date().toISOString(),
+          reviewCount: c.review_count,
+          easeFactor: c.ease_factor,
+          interval: c.interval,
         })),
         multipleChoice: data.multipleChoice,
         trueFalse: data.trueFalse,
         fillInBlanks: data.fillInBlanks,
       }
+
       setDecks(prev => [deck, ...prev])
       setActiveDeck(deck)
       setActiveTab('study')
@@ -179,8 +258,12 @@ export default function FlashcardsPage() {
     } finally { setIsGenerating(false) }
   }
 
-  const handleFlashcardRating = useCallback((rating: 0 | 1 | 2 | 3 | 4 | 5) => {
+  const handleFlashcardRating = useCallback(async (rating: 0 | 1 | 2 | 3 | 4 | 5) => {
     if (!activeDeck || !currentCard) return
+
+    // Update in Supabase
+    await reviewFlashcard(currentCard.id, rating)
+
     const updates = sm2(currentCard, rating)
     const updatedDeck = {
       ...activeDeck,
@@ -270,7 +353,11 @@ export default function FlashcardsPage() {
                       <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center shrink-0">
                         <BookOpen className="w-5 h-5 text-white" />
                       </div>
-                      <button onClick={() => setDecks(prev => prev.filter(d => d.id !== deck.id))}
+                      <button onClick={async () => {
+                        await deleteFlashcardDeck(deck.id)
+                        setDecks(prev => prev.filter(d => d.id !== deck.id))
+                        toastSuccess('Deck deleted')
+                      }}
                         className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-all">
                         <Trash2 className="w-4 h-4" />
                       </button>

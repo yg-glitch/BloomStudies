@@ -1,47 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import { createClient } from '@/lib/supabase/server'
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
-
-export interface Flashcard {
-  id: string
-  front: string
-  back: string
-  subject: string
-  difficulty: 'easy' | 'medium' | 'hard'
-  tags: string[]
-}
-
-export interface MultipleChoiceQ {
-  id: string
-  question: string
-  options: string[]
-  correct: number
-  explanation: string
-}
-
-export interface TrueFalseQ {
-  id: string
-  statement: string
-  answer: boolean
-  explanation: string
-}
-
-export interface FillBlankQ {
-  id: string
-  sentence: string
-  blanks: string[]
-  hint: string
-}
-
-export interface GeneratedSet {
-  title: string
-  subject: string
-  flashcards: Flashcard[]
-  multipleChoice: MultipleChoiceQ[]
-  trueFalse: TrueFalseQ[]
-  fillInBlanks: FillBlankQ[]
-}
 
 export async function POST(req: NextRequest) {
   try {
@@ -108,13 +69,34 @@ Create exactly ${count} flashcards, ${Math.ceil(count * 0.6)} multiple choice qu
     const result = await model.generateContent(prompt)
     const text = result.response.text()
     const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-    const parsed: GeneratedSet = JSON.parse(cleaned)
+    const parsed = JSON.parse(cleaned)
 
-    // Ensure IDs are unique strings
-    parsed.flashcards = parsed.flashcards.map((f, i) => ({ ...f, id: `fc_${Date.now()}_${i}` }))
-    parsed.multipleChoice = parsed.multipleChoice.map((q, i) => ({ ...q, id: `mc_${Date.now()}_${i}` }))
-    parsed.trueFalse = parsed.trueFalse.map((q, i) => ({ ...q, id: `tf_${Date.now()}_${i}` }))
-    parsed.fillInBlanks = parsed.fillInBlanks.map((q, i) => ({ ...q, id: `fb_${Date.now()}_${i}` }))
+    // Stamp unique IDs
+    const ts = Date.now()
+    parsed.flashcards = parsed.flashcards.map((f: any, i: number) => ({ ...f, id: `fc_${ts}_${i}` }))
+    parsed.multipleChoice = parsed.multipleChoice.map((q: any, i: number) => ({ ...q, id: `mc_${ts}_${i}` }))
+    parsed.trueFalse = parsed.trueFalse.map((q: any, i: number) => ({ ...q, id: `tf_${ts}_${i}` }))
+    parsed.fillInBlanks = parsed.fillInBlanks.map((q: any, i: number) => ({ ...q, id: `fb_${ts}_${i}` }))
+
+    // Save to Supabase if authenticated
+    try {
+      const supabase = await createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        await supabase.from('flashcard_decks').insert({
+          user_id: user.id,
+          title: parsed.title,
+          subject: parsed.subject,
+          flashcards: parsed.flashcards.map((f: any) => ({
+            ...f, mastery: 0, nextReview: new Date().toISOString(),
+            reviewCount: 0, easeFactor: 2.5, interval: 1,
+          })),
+          multiple_choice: parsed.multipleChoice,
+          true_false: parsed.trueFalse,
+          fill_in_blanks: parsed.fillInBlanks,
+        })
+      }
+    } catch { /* non-blocking */ }
 
     return NextResponse.json(parsed)
   } catch (error: any) {

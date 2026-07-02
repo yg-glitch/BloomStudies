@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { Plan, PLAN_LIMITS, PlanLimits } from '@/lib/subscription'
 import { useLocalStorage } from '@/lib/useLocalStorage'
+import { createClient } from '@/lib/supabase/client'
 
 interface UsageData {
   aiMessagesToday: number
@@ -48,28 +49,44 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const [usage, setUsage] = useLocalStorage<UsageData>('bloom-usage', DEFAULT_USAGE)
   const [referralCode, setReferralCode] = useState('')
   const [referralUrl, setReferralUrl] = useState('')
-  const [, , , loaded] = useLocalStorage('bloom-plan', 'free')
 
   const limits = PLAN_LIMITS[plan]
   const isPremium = plan === 'premium'
 
-  // Reset daily/monthly usage counters
+  // Sync plan from Supabase — source of truth, prevents localStorage bypass
+  useEffect(() => {
+    const syncPlan = async () => {
+      try {
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('plan, stripe_customer_id')
+          .eq('id', user.id)
+          .single()
+        if (profile) {
+          setPlan((profile.plan as Plan) || 'free')
+          if (profile.stripe_customer_id) setStripeCustomerId(profile.stripe_customer_id)
+        }
+      } catch { /* non-blocking */ }
+    }
+    syncPlan()
+  }, [])
+
+  // Reset daily/monthly counters
   useEffect(() => {
     const today = new Date().toDateString()
     const thisMonth = new Date().toISOString().slice(0, 7)
     setUsage(u => {
       let updated = { ...u }
-      if (u.lastResetDate !== today) {
-        updated = { ...updated, aiMessagesToday: 0, lastResetDate: today }
-      }
-      if (u.lastMonthResetDate !== thisMonth) {
-        updated = { ...updated, gradingsThisMonth: 0, notesThisMonth: 0, audioLessonsCreated: 0, lastMonthResetDate: thisMonth }
-      }
+      if (u.lastResetDate !== today) updated = { ...updated, aiMessagesToday: 0, lastResetDate: today }
+      if (u.lastMonthResetDate !== thisMonth) updated = { ...updated, gradingsThisMonth: 0, notesThisMonth: 0, audioLessonsCreated: 0, lastMonthResetDate: thisMonth }
       return updated
     })
   }, [])
 
-  // Generate referral code on mount
+  // Generate referral code
   useEffect(() => {
     const uid = stripeCustomerId || 'user_' + Math.random().toString(36).slice(2, 9)
     fetch('/api/stripe/referral', {
@@ -77,19 +94,15 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: uid }),
     }).then(r => r.json()).then(d => {
-      if (d.referralCode) {
-        setReferralCode(d.referralCode)
-        setReferralUrl(d.referralUrl)
-      }
+      if (d.referralCode) { setReferralCode(d.referralCode); setReferralUrl(d.referralUrl) }
     }).catch(() => {})
-  }, [])
+  }, [stripeCustomerId])
 
   const checkLimit = (feature: keyof PlanLimits): boolean => {
     if (isPremium) return true
     const limit = limits[feature]
     if (typeof limit === 'boolean') return limit
     if (limit === -1) return true
-
     const usageMap: Partial<Record<keyof PlanLimits, number>> = {
       aiMessagesPerDay: usage.aiMessagesToday,
       gradingsPerMonth: usage.gradingsThisMonth,
@@ -97,8 +110,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       audioLessons: usage.audioLessonsCreated,
       notesPerMonth: usage.notesThisMonth,
     }
-    const used = usageMap[feature] ?? 0
-    return used < (limit as number)
+    return (usageMap[feature] ?? 0) < (limit as number)
   }
 
   const incrementUsage = (feature: keyof UsageData) => {
@@ -106,29 +118,18 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   }
 
   const upgradeToPremium = async (couponCode?: string, referralCode?: string) => {
-    try {
-      const res = await fetch('/api/stripe/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_ID,
-          couponCode,
-          referralCode,
-        }),
-      })
-      const data = await res.json()
-      if (data.url) {
-        window.location.href = data.url
-      } else {
-        throw new Error(data.error || 'Failed to create checkout session')
-      }
-    } catch (error: any) {
-      throw error
-    }
+    const res = await fetch('/api/stripe/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_ID, couponCode, referralCode }),
+    })
+    const data = await res.json()
+    if (data.url) window.location.href = data.url
+    else throw new Error(data.error || 'Failed to create checkout session')
   }
 
   const openBillingPortal = async () => {
-    if (!stripeCustomerId) throw new Error('No customer ID')
+    if (!stripeCustomerId) throw new Error('No customer ID — please upgrade first')
     const res = await fetch('/api/stripe/portal', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -136,6 +137,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     })
     const data = await res.json()
     if (data.url) window.location.href = data.url
+    else throw new Error(data.error || 'Failed to open billing portal')
   }
 
   return (

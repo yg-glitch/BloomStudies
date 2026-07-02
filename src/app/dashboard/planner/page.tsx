@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   Calendar, Plus, Clock, Target, CheckCircle2, Circle,
   Sparkles, X, ChevronLeft, ChevronRight, Trophy,
@@ -8,10 +8,13 @@ import {
   Trash2, Edit, Bell
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useLocalStorage } from '@/lib/useLocalStorage'
 import { useToast } from '@/components/ui/Toast'
 import { addDays, format, startOfWeek, endOfWeek, eachDayOfInterval,
   isSameDay, isToday, isPast, parseISO, startOfMonth, endOfMonth } from 'date-fns'
+import { createClient } from '@/lib/supabase/client'
+import { getStudySessions, createStudySession, updateStudySession } from '@/lib/database/study-sessions'
+import { getExams } from '@/lib/database/exams'
+import { useLocalStorage } from '@/lib/useLocalStorage'
 
 interface StudySession {
   id: string; date: string; startTime: string; endTime: string
@@ -61,7 +64,11 @@ const PRIORITY_DOT: Record<string, string> = {
 }
 
 export default function StudyPlannerPage() {
-  const [plan, setPlan, , planLoaded] = useLocalStorage<StudyPlan | null>('bloom-study-plan', null)
+  const supabase = createClient()
+  const [sessions, setSessions] = useState<StudySession[]>([])
+  const [exams, setExams] = useState<ExamEntry[]>([])
+  const [plan, setPlan] = useLocalStorage<StudyPlan | null>('bloom-study-plan-meta', null)
+  const [loading, setLoading] = useState(true)
   const [view, setView] = useState<'day'|'week'|'month'>('week')
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [activeTab, setActiveTab] = useState<'schedule'|'setup'|'progress'|'advice'>('schedule')
@@ -74,8 +81,49 @@ export default function StudyPlannerPage() {
     examDates: [{ subject: '', date: '', level: 'higher', targetGrade: 'H1' }],
   })
 
+  useEffect(() => {
+    loadData()
+  }, [])
+
+  const loadData = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const [sessionsData, examsData] = await Promise.all([
+        getStudySessions(user.id),
+        getExams(user.id),
+      ])
+
+      setSessions(sessionsData.map(s => ({
+        id: s.id,
+        date: s.date,
+        startTime: '09:00',
+        endTime: '10:00',
+        subject: s.subject,
+        topic: s.topic || '',
+        type: 'study' as const,
+        priority: 'medium' as const,
+        completed: s.completed,
+        missed: false,
+        notes: '',
+      })))
+
+      setExams(examsData.map(e => ({
+        subject: e.subject,
+        date: e.exam_date,
+        level: e.exam_level || 'higher',
+        targetGrade: e.target_grade || 'H1',
+      })))
+    } catch (error) {
+      console.error('Error loading planner data:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const sessionsForDate = (date: Date) =>
-    plan?.sessions.filter(s => isSameDay(parseISO(s.date), date)) || []
+    sessions.filter(s => isSameDay(parseISO(s.date), date)) || []
 
   const weekDays = useMemo(() => {
     const start = startOfWeek(selectedDate, { weekStartsOn: 1 })
@@ -91,33 +139,50 @@ export default function StudyPlannerPage() {
   const todaySessions = sessionsForDate(selectedDate)
   const completedToday = todaySessions.filter(s => s.completed).length
   const totalToday = todaySessions.length
-  const missedSessions = plan?.sessions.filter(s => !s.completed && isPast(parseISO(s.date)) && !isSameDay(parseISO(s.date), new Date())).length || 0
+  const missedSessions = sessions.filter(s => !s.completed && isPast(parseISO(s.date)) && !isSameDay(parseISO(s.date), new Date())).length || 0
 
   const { xp: toastXP, success: toastSuccess, error: toastError } = useToast()
 
-  const toggleComplete = (id: string) => {
-    if (!plan) return
-    const session = plan.sessions.find(s => s.id === id)
-    const wasComplete = session?.completed
-    const updated = { ...plan, sessions: plan.sessions.map(s => s.id === id ? { ...s, completed: !s.completed, missed: false } : s) }
-    setPlan(updated)
-    if (!wasComplete) {
-      toastXP(10, `Completed ${session?.subject} session`)
-      const completedCount = updated.sessions.filter(s => s.completed).length
-      if (completedCount === 1) setTimeout(() => toastSuccess('First session done!', 'Keep the momentum going 🚀'), 500)
+  const toggleComplete = async (id: string) => {
+    const session = sessions.find(s => s.id === id)
+    if (!session) return
+
+    const wasComplete = session.completed
+    const updated = sessions.map(s => s.id === id ? { ...s, completed: !s.completed, missed: false } : s)
+    setSessions(updated)
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        await updateStudySession(id, { completed: !wasComplete })
+      }
+      if (!wasComplete) toastXP(10)
+      toastSuccess(wasComplete ? 'Session marked as incomplete' : 'Session completed! +10 XP')
+    } catch (error) {
+      toastError('Failed to update session')
+      setSessions(sessions) // Revert on error
     }
   }
 
-  const markMissed = (id: string) => {
-    if (!plan) return
-    const updated = { ...plan, sessions: plan.sessions.map(s => s.id === id ? { ...s, missed: true, completed: false } : s) }
-    setPlan(updated)
+  const markMissed = async (id: string) => {
+    const updated = sessions.map(s => s.id === id ? { ...s, missed: true, completed: false } : s)
+    setSessions(updated)
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        await updateStudySession(id, { completed: false })
+      }
+      toastSuccess('Session marked as missed')
+    } catch (error) {
+      toastError('Failed to update session')
+      setSessions(sessions)
+    }
   }
 
   // Auto-reschedule missed sessions
   const reschedule = () => {
-    if (!plan) return
-    const missed = plan.sessions.filter(s => s.missed)
+    const missed = sessions.filter(s => s.missed)
     let nextDate = new Date()
     nextDate.setDate(nextDate.getDate() + 1)
     const rescheduled = missed.map(s => {
@@ -125,11 +190,12 @@ export default function StudyPlannerPage() {
       nextDate = addDays(nextDate, 1)
       return { ...s, date: newDate, missed: false }
     })
-    const updated = { ...plan, sessions: plan.sessions.map(s => {
+    const updated = sessions.map(s => {
       const r = rescheduled.find(r => r.id === s.id)
       return r || s
-    })}
-    setPlan(updated)
+    })
+    setSessions(updated)
+    toastSuccess(`${rescheduled.length} sessions rescheduled`)
   }
 
   const addSubject = (s: string) => {
@@ -142,6 +208,8 @@ export default function StudyPlannerPage() {
     if (form.subjects.length === 0) { setGenerateError('Please select at least one subject.'); return }
     setIsGenerating(true); setGenerateError('')
     try {
+      const { data: { user } } = await supabase.auth.getUser()
+
       const res = await fetch('/api/ai/planner', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -149,11 +217,78 @@ export default function StudyPlannerPage() {
       })
       if (!res.ok) throw new Error((await res.json()).error)
       const data: StudyPlan = await res.json()
+
+      // Persist sessions + exams to Supabase
+      if (user) {
+        // Save sessions
+        const sessionInserts = data.sessions
+          .filter(s => s.type !== 'break')
+          .map(s => ({
+            user_id: user.id,
+            subject: s.subject,
+            topic: s.topic || null,
+            date: s.date,
+            session_type: s.type,
+            priority: s.priority,
+            completed: false,
+            missed: false,
+          }))
+
+        if (sessionInserts.length > 0) {
+          const { data: insertedSessions } = await supabase
+            .from('study_sessions')
+            .insert(sessionInserts)
+            .select('id, subject, topic, date, session_type, priority, completed')
+
+          if (insertedSessions) {
+            // Update in-memory sessions with real DB ids
+            const mapped = insertedSessions.map(s => ({
+              id: s.id,
+              date: s.date,
+              startTime: '09:00',
+              endTime: '10:00',
+              subject: s.subject,
+              topic: s.topic || '',
+              type: s.session_type as any,
+              priority: s.priority as any,
+              completed: s.completed,
+              missed: false,
+              notes: '',
+            }))
+            setSessions(mapped)
+          }
+        }
+
+        // Save exam dates
+        if (data.examEntries?.length) {
+          const examInserts = data.examEntries
+            .filter(e => e.subject && e.date)
+            .map(e => ({
+              user_id: user.id,
+              subject: e.subject,
+              exam_date: e.date,
+              exam_level: e.level,
+              target_grade: e.targetGrade,
+            }))
+          if (examInserts.length > 0) {
+            const { data: insertedExams } = await supabase.from('exams').insert(examInserts).select()
+            if (insertedExams) {
+              setExams(insertedExams.map(e => ({
+                subject: e.subject,
+                date: e.exam_date,
+                level: e.exam_level || 'higher',
+                targetGrade: e.target_grade || 'H1',
+              })))
+            }
+          }
+        }
+      }
+
       setPlan(data)
       setShowSetup(false)
       setActiveTab('schedule')
       const sessionCount = data.sessions.filter((s: any) => s.type !== 'break').length
-      toastSuccess('Study plan created!', `${sessionCount} sessions over 4 weeks`)
+      toastSuccess('Study plan created!', `${sessionCount} sessions saved to your planner`)
       toastXP(50, 'Created personalised study plan')
     } catch (err: any) {
       setGenerateError(err.message || 'Failed to generate plan.')
@@ -574,6 +709,7 @@ export default function StudyPlannerPage() {
     </div>
   )
 }
+
 
 
 

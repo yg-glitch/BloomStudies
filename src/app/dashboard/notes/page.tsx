@@ -1,15 +1,16 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import {
   BookOpen, Plus, Sparkles, Trash2, Search, Upload,
   FileText, Download, Brain, AlignLeft, Tag, HelpCircle,
   Network, Layers, ChevronRight, X, Eye, Copy, Check as CheckIcon
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useLocalStorage } from '@/lib/useLocalStorage'
 import { useToast } from '@/components/ui/Toast'
 import MarkdownRenderer from '@/components/ui/MarkdownRenderer'
+import { createClient } from '@/lib/supabase/client'
+import { getNotes, createNote, updateNote, deleteNote } from '@/lib/database/notes'
 
 type NotesAction = 'summarise' | 'explain' | 'key-concepts' | 'definitions' | 'revision-notes' | 'flashcards' | 'quiz' | 'mind-map'
 
@@ -41,7 +42,9 @@ const AI_ACTIONS: { action: NotesAction; label: string; icon: string; descriptio
 ]
 
 export default function AINotesPage() {
-  const [notes, setNotes, , notesLoaded] = useLocalStorage<Note[]>('bloom-ai-notes', [])
+  const supabase = createClient()
+  const [notes, setNotes] = useState<Note[]>([])
+  const [loading, setLoading] = useState(true)
   const [selectedNote, setSelectedNote] = useState<Note | null>(null)
   const [activeResult, setActiveResult] = useState<NotesAction | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -56,6 +59,33 @@ export default function AINotesPage() {
   const [copied, setCopied] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const exportRef = useRef<HTMLDivElement>(null)
+
+  // Load notes from Supabase on mount
+  useEffect(() => {
+    loadNotes()
+  }, [])
+
+  const loadNotes = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const notesData = await getNotes(user.id)
+      setNotes(notesData.map(n => ({
+        id: n.id,
+        title: n.title,
+        subject: n.subject || 'General',
+        rawContent: n.content,
+        createdAt: n.created_at,
+        updatedAt: n.updated_at,
+        results: {},
+      })))
+    } catch (error) {
+      console.error('Error loading notes:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const filtered = notes.filter(n =>
     n.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -97,23 +127,39 @@ export default function AINotesPage() {
 
   const { xp: toastXP, success: toastSuccess } = useToast()
 
-  const handleCreateNote = () => {
+  const handleCreateNote = async () => {
     if (!newContent.trim() || !newTitle.trim()) return
-    const note: Note = {
-      id: Date.now().toString(),
-      title: newTitle,
-      subject: newSubject || 'General',
-      rawContent: newContent,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      results: {},
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const createdNote = await createNote(user.id, {
+        title: newTitle,
+        content: newContent,
+        subject: newSubject || 'General',
+        tags: null,
+      })
+
+      if (!createdNote) throw new Error('Failed to create note')
+
+      const note: Note = {
+        id: createdNote.id,
+        title: createdNote.title,
+        subject: createdNote.subject || 'General',
+        rawContent: createdNote.content,
+        createdAt: createdNote.created_at,
+        updatedAt: createdNote.updated_at,
+        results: {},
+      }
+      setNotes(prev => [note, ...prev])
+      setSelectedNote(note)
+      setShowNewModal(false)
+      setNewTitle(''); setNewSubject(''); setNewContent('')
+      toastSuccess('Note created', `${newTitle} · ${newContent.split(/\s+/).length} words`)
+      toastXP(10, 'Created a new note')
+    } catch (error) {
+      console.error('Error creating note:', error)
     }
-    setNotes(prev => [note, ...prev])
-    setSelectedNote(note)
-    setShowNewModal(false)
-    setNewTitle(''); setNewSubject(''); setNewContent('')
-    toastSuccess('Note created', `${newTitle} · ${newContent.split(/\s+/).length} words`)
-    toastXP(10, 'Created a new note')
   }
 
   const handleAIAction = async (action: NotesAction) => {
@@ -133,6 +179,11 @@ export default function AINotesPage() {
       setSelectedNote(updated)
       setNotes(prev => prev.map(n => n.id === updated.id ? updated : n))
       setActiveResult(action)
+
+      // Save the AI result to the note content in Supabase (append as a section)
+      await updateNote(selectedNote.id, {
+        content: selectedNote.rawContent + `\n\n## ${action.toUpperCase()}\n\n${result}`,
+      })
     } catch (err: any) {
       console.error(err)
     } finally {
@@ -215,7 +266,13 @@ export default function AINotesPage() {
                   <div className="font-medium text-sm truncate">{note.title}</div>
                   <div className={cn('text-xs mt-0.5 truncate', selectedNote?.id === note.id ? 'text-white/70' : 'text-slate-400')}>{note.subject}</div>
                 </div>
-                <button onClick={e => { e.stopPropagation(); setNotes(prev => prev.filter(n => n.id !== note.id)); if (selectedNote?.id === note.id) setSelectedNote(null) }}
+                <button onClick={async (e) => {
+                  e.stopPropagation()
+                  await deleteNote(note.id)
+                  setNotes(prev => prev.filter(n => n.id !== note.id))
+                  if (selectedNote?.id === note.id) setSelectedNote(null)
+                  toastSuccess('Note deleted')
+                }}
                   className="opacity-0 group-hover:opacity-100 p-1 rounded hover:text-red-500 transition-all shrink-0">
                   <Trash2 className="w-3 h-3" />
                 </button>
@@ -402,6 +459,7 @@ export default function AINotesPage() {
     </div>
   )
 }
+
 
 
 

@@ -2,17 +2,18 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, Brain, FileCheck, Layers, BookOpen,
   Headphones, FileText, Calendar, TrendingUp, Settings,
   ChevronLeft, ChevronRight, Moon, Sun, Users, GraduationCap,
-  Sparkles, Crown
+  Sparkles, Crown, LogOut
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useState, useEffect } from 'react'
 import { useTheme } from '@/components/ThemeProvider'
 import UpgradePrompt from '@/components/ui/UpgradePrompt'
+import { createClient } from '@/lib/supabase/client'
 
 const NAV_GROUPS = [
   {
@@ -38,16 +39,39 @@ const NAV_GROUPS = [
     label: 'Community',
     items: [
       { name: 'Community', href: '/dashboard/community', icon: Users, badge: 'New' },
-      { name: 'Bloom Learn', href: '/dashboard/learn', icon: GraduationCap },
+      { name: 'Academy', href: '/dashboard/learn', icon: GraduationCap },
     ],
   },
 ]
 
 export default function Sidebar() {
   const pathname = usePathname()
+  const router = useRouter()
+  const supabase = createClient()
   const { theme, toggleTheme } = useTheme()
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [isMobileOpen, setIsMobileOpen] = useState(false)
+  const [profile, setProfile] = useState<{ full_name?: string; xp?: number; streak?: number; level?: string } | null>(null)
+
+  // Load profile stats
+  useEffect(() => {
+    const loadProfile = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data } = await supabase
+        .from('profiles')
+        .select('full_name, xp, streak, level')
+        .eq('id', user.id)
+        .single()
+      if (data) setProfile(data)
+    }
+    loadProfile()
+  }, [])
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    router.push('/auth/signin')
+  }
 
   // Close mobile sidebar on route change
   useEffect(() => { setIsMobileOpen(false) }, [pathname])
@@ -179,6 +203,24 @@ export default function Sidebar() {
 
         {/* Bottom actions */}
         <div className="shrink-0 border-t border-slate-200 dark:border-slate-800 p-2 space-y-0.5">
+          {/* XP / streak strip — live from Supabase */}
+          {!isCollapsed && profile && (profile.streak || profile.xp) ? (
+            <div className="flex items-center gap-2 px-3 py-2 mb-1 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+              {!!profile.streak && <>
+                <span className="text-sm" aria-hidden="true">🔥</span>
+                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{profile.streak}d</span>
+              </>}
+              {!!profile.xp && <>
+                <span className="mx-1 text-slate-300 dark:text-slate-600" aria-hidden="true">·</span>
+                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{profile.xp.toLocaleString()} XP</span>
+              </>}
+              {profile.level && (
+                <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-primary-100 dark:bg-primary-950/50 text-primary-600 dark:text-primary-400">
+                  {profile.level}
+                </span>
+              )}
+            </div>
+          ) : null}
           {/* Upgrade prompt — free users only */}
           {!isCollapsed && (
             <UpgradePrompt feature="Premium Features" description="Unlock unlimited AI access" inline />
@@ -198,6 +240,19 @@ export default function Sidebar() {
             <Settings className="w-[18px] h-[18px] shrink-0" />
             {!isCollapsed && <span className="font-medium text-sm">Settings</span>}
           </Link>
+
+          <button
+            onClick={handleLogout}
+            aria-label="Sign out"
+            className={cn(
+              'flex items-center gap-3 rounded-xl transition-all duration-150',
+              isCollapsed ? 'h-10 w-10 mx-auto justify-center' : 'px-3 py-2.5',
+              'text-slate-600 dark:text-slate-400 hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-600 dark:hover:text-red-400'
+            )}
+          >
+            <LogOut className="w-[18px] h-[18px] shrink-0" />
+            {!isCollapsed && <span className="font-medium text-sm">Sign Out</span>}
+          </button>
 
           <div className={cn('flex', isCollapsed ? 'flex-col gap-0.5' : 'flex-row gap-1')}>
             <button

@@ -8,7 +8,6 @@ import {
   ChevronUp, ChevronDown, RefreshCw, Trophy, Activity
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useLocalStorage } from '@/lib/useLocalStorage'
 import { useToast } from '@/components/ui/Toast'
 import {
   AreaChart, Area, BarChart, Bar, RadarChart, Radar,
@@ -16,6 +15,10 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, LineChart, Line, Cell, PieChart, Pie
 } from 'recharts'
+import { createClient } from '@/lib/supabase/client'
+import { getGradedAnswers } from '@/lib/database/graded-answers'
+import { getFlashcardDecks, getFlashcards, getFlashcardsByDeck } from '@/lib/database/flashcards'
+import { getStudySessions } from '@/lib/database/study-sessions'
 
 interface AIInsights {
   predictedPoints: number
@@ -36,36 +39,83 @@ const SUBJECT_COLORS: Record<string, string> = {
   Economics: '#6366f1',
 }
 
-const GRADE_TO_POINTS: Record<string, number> = {
-  H1: 100, H2: 88, H3: 77, H4: 66, H5: 56, H6: 46, H7: 37, H8: 0,
-  O1: 56, O2: 46, O3: 37, O4: 28, O5: 20, O6: 12, O7: 0, O8: 0,
-}
-
-// Mock activity data — in production this would come from actual user actions
-function generateActivityData() {
-  const days = []
-  for (let i = 29; i >= 0; i--) {
-    const d = new Date(); d.setDate(d.getDate() - i)
-    days.push({
-      date: d.toLocaleDateString('en-IE', { day: 'numeric', month: 'short' }),
-      hours: Math.random() > 0.3 ? +(Math.random() * 4 + 0.5).toFixed(1) : 0,
-      score: Math.floor(Math.random() * 30 + 65),
-    })
-  }
-  return days
-}
-
+// Activity data is now derived from real study sessions in the component
 const WEEKLY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 export default function ProgressPage() {
+  const supabase = createClient()
   const [period, setPeriod] = useState<'week'|'month'|'year'>('week')
   const [activeTab, setActiveTab] = useState<'overview'|'subjects'|'activity'|'ai'>('overview')
   const [insights, setInsights] = useState<AIInsights | null>(null)
   const [isLoadingAI, setIsLoadingAI] = useState(false)
-  const [graderSubmissions] = useLocalStorage<any[]>('bloom-grader-submissions', [])
-  const [flashcardDecks] = useLocalStorage<any[]>('bloom-flashcard-decks', [])
+  const [graderSubmissions, setGraderSubmissions] = useState<any[]>([])
+  const [flashcardDecks, setFlashcardDecks] = useState<any[]>([])
+  const [studySessions, setStudySessions] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const activityData = useMemo(() => generateActivityData(), [])
+  // Load real data from Supabase
+  useEffect(() => {
+    loadProgressData()
+  }, [])
+
+  const loadProgressData = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const [gradedData, decksData, sessionsData] = await Promise.all([
+        getGradedAnswers(user.id),
+        getFlashcardDecks(user.id),
+        getStudySessions(user.id),
+      ])
+
+      setGraderSubmissions(gradedData.map(g => ({
+        subject: g.subject,
+        created_at: g.created_at,
+        result: {
+          percentageScore: g.result?.percentageScore || g.percentage_score || 0,
+          estimatedGrade: g.result?.estimatedGrade || g.estimated_grade || '',
+        },
+      })))
+
+      const decksWithCards = []
+      for (const deck of decksData) {
+        const cards = await getFlashcardsByDeck(deck.id)
+        decksWithCards.push({
+          id: deck.id,
+          flashcards: cards,
+        })
+      }
+      setFlashcardDecks(decksWithCards)
+      setStudySessions(sessionsData)
+    } catch (error) {
+      console.error('Error loading progress data:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const activityData = useMemo(() => {
+    const days = []
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(); d.setDate(d.getDate() - i)
+      const dateStr = d.toISOString().split('T')[0]
+      const sessionHours = studySessions
+        .filter(s => s.date === dateStr)
+        .reduce((acc, s) => acc + (s.duration_minutes ? s.duration_minutes / 60 : 0), 0)
+      // Score from graded answers on this day (or 0)
+      const dayScores = graderSubmissions
+        .filter(s => s.created_at?.startsWith(dateStr))
+        .map(s => s.result?.percentageScore || 0)
+      const dayScore = dayScores.length ? Math.round(dayScores.reduce((a, b) => a + b, 0) / dayScores.length) : 0
+      days.push({
+        date: d.toLocaleDateString('en-IE', { day: 'numeric', month: 'short' }),
+        hours: sessionHours > 0 ? +sessionHours.toFixed(1) : 0,
+        score: dayScore,
+      })
+    }
+    return days
+  }, [studySessions, graderSubmissions])
 
   // Derive stats from real stored data
   const graderStats = useMemo(() => {
@@ -498,6 +548,8 @@ export default function ProgressPage() {
     </div>
   )
 }
+
+
 
 
 

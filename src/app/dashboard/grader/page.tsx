@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import {
   FileCheck, Upload, Sparkles, ChevronDown, Trophy,
   TrendingUp, AlertCircle, CheckCircle, XCircle,
@@ -10,7 +10,8 @@ import {
 import { cn } from '@/lib/utils'
 import MarkdownRenderer from '@/components/ui/MarkdownRenderer'
 import { useToast } from '@/components/ui/Toast'
-import { useLocalStorage } from '@/lib/useLocalStorage'
+import { createClient } from '@/lib/supabase/client'
+import { createGradedAnswer, getGradedAnswers, getGradedAnswer } from '@/lib/database/graded-answers'
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -107,6 +108,7 @@ function ScoreRing({ score, label, color }: { score: number; label: string; colo
 }
 
 export default function ExamGraderPage() {
+  const supabase = createClient()
   const [educationSystem, setEducationSystem] = useState<'leaving-cert' | 'junior-cycle'>('leaving-cert')
   const [level, setLevel] = useState<'higher' | 'ordinary'>('higher')
   const [subject, setSubject] = useState('')
@@ -115,11 +117,39 @@ export default function ExamGraderPage() {
   const [maxMarks, setMaxMarks] = useState(100)
   const [isGrading, setIsGrading] = useState(false)
   const [result, setResult] = useState<GraderResult | null>(null)
-  const [submissions, setSubmissions, , submissionsLoaded] = useLocalStorage<Submission[]>('bloom-grader-submissions', [])
+  const [submissions, setSubmissions] = useState<Submission[]>([])
   const [activeTab, setActiveTab] = useState<'grade' | 'history' | 'progress'>('grade')
   const [showSuggestedAnswer, setShowSuggestedAnswer] = useState(false)
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    loadSubmissions()
+  }, [])
+
+  const loadSubmissions = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const answers = await getGradedAnswers(user.id)
+      setSubmissions(answers.map(a => ({
+        id: a.id,
+        subject: a.subject,
+        question: a.question,
+        studentAnswer: a.student_answer,
+        result: a.result as GraderResult,
+        timestamp: new Date(a.created_at),
+        educationSystem: a.education_system,
+        level: a.level,
+      })))
+    } catch (error) {
+      console.error('Error loading submissions:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const wordCount = studentAnswer.trim().split(/\s+/).filter(Boolean).length
 
@@ -146,37 +176,42 @@ export default function ExamGraderPage() {
       if (!response.ok) throw new Error(data.error || 'Failed to grade')
 
       setResult(data)
+      
+      // Save to database
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        await createGradedAnswer(user.id, subject, question, studentAnswer, data, educationSystem, level)
+      }
+
       const submission: Submission = {
         id: Date.now().toString(),
-        subject, question, studentAnswer,
-        result: data, timestamp: new Date(),
-        educationSystem, level,
+        subject,
+        question,
+        studentAnswer,
+        result: data,
+        timestamp: new Date(),
+        educationSystem,
+        level,
       }
       setSubmissions(prev => [submission, ...prev])
-
-      // Toast feedback based on grade
-      const grade = data.estimatedGrade
-      if (grade === 'H1' || grade === 'O1' || grade === 'Distinction') {
-        toastAchievement(`${grade} — Outstanding!`, '🌟')
-        toastXP(150, `${grade} grade in ${subject}`)
-      } else if (grade === 'H2' || grade === 'O2' || grade === 'Higher Merit') {
-        toastSuccess(`${grade} in ${subject}!`, `${data.percentageScore}% — Excellent work`)
-        toastXP(100, `Graded ${subject}`)
-      } else {
-        toastSuccess('Answer graded', `${grade} · ${data.percentageScore}% · ${data.estimatedMarks}/${data.maxMarks} marks`)
-        toastXP(50, `Graded ${subject}`)
-      }
-
-      // First submission achievement
-      if (submissions.length === 0) {
-        setTimeout(() => toastAchievement('First Grading', '✍️'), 1500)
-      }
-    } catch (err: any) {
-      setError(err.message || 'Failed to grade answer. Please try again.')
-      toastError('Grading failed', 'Please try again in a moment')
+      
+      toastSuccess('Answer graded successfully!')
+      toastXP(15, 'Exam Grader')
+      if (data.percentageScore >= 80) toastAchievement('Excellent Answer!', '🏆')
+    } catch (error: any) {
+      console.error('Grading error:', error)
+      toastError('Failed to grade answer', error.message || 'Please try again')
     } finally {
       setIsGrading(false)
     }
+  }
+
+  const handleReset = () => {
+    setQuestion('')
+    setStudentAnswer('')
+    setResult(null)
+    setShowSuggestedAnswer(false)
+    setError('')
   }
 
   const radarData = result ? [

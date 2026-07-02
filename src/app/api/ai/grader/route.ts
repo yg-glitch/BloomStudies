@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import { createClient } from '@/lib/supabase/server'
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
 
@@ -88,7 +89,37 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Failed to parse AI response', raw: responseText }, { status: 500 })
     }
 
+    // Save to Supabase if user is authenticated
+    try {
+      const supabase = await createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        await supabase.from('graded_answers').insert({
+          user_id: user.id,
+          subject,
+          education_system: educationSystem,
+          level,
+          question,
+          student_answer: studentAnswer,
+          max_marks: maxMarks,
+          estimated_grade: parsed.estimatedGrade,
+          estimated_marks: parsed.estimatedMarks,
+          percentage_score: parsed.percentageScore,
+          bloom_score: parsed.bloomScore,
+          examiner_feedback: parsed.examinerFeedback,
+          strengths: parsed.strengths,
+          weaknesses: parsed.weaknesses,
+          areas_to_improve: parsed.areasToImprove,
+          suggested_answer: parsed.suggestedAnswer,
+          missing_key_points: parsed.missingKeyPoints,
+          scores: parsed.scores,
+        })
+      }
+    } catch { /* non-blocking */ }
+
     return NextResponse.json(parsed)
+
+    // Save to DB (non-blocking — after response sent)
   } catch (error: any) {
     console.error('Grader API error:', error)
     return NextResponse.json(

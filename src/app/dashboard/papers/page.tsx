@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import Link from 'next/link'
 import {
   FileText, Download, Clock, Calendar, Search,
@@ -9,25 +9,11 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { createClient } from '@/lib/supabase/client'
+import { getPastPapers, getPastPaperYears, getPastPaperSubjects, type PastPaper } from '@/lib/database/past-papers'
 
 const SUBJECTS = ['All', 'Mathematics', 'English', 'Irish', 'Physics', 'Chemistry', 'Biology', 'History', 'Geography', 'Business', 'Economics', 'Accounting', 'French', 'German', 'Spanish', 'Computer Science', 'Agricultural Science']
-const YEARS = ['All', '2024', '2023', '2022', '2021', '2020', '2019']
 const LEVELS = ['All', 'Higher', 'Ordinary']
-
-const PAPERS = [
-  { id: 1, subject: 'Mathematics', year: 2024, level: 'Higher', paper: 'Paper 1', duration: '2h 30m', questions: 12, topics: ['Algebra', 'Calculus', 'Number'] },
-  { id: 2, subject: 'Mathematics', year: 2024, level: 'Higher', paper: 'Paper 2', duration: '2h 30m', questions: 12, topics: ['Geometry', 'Trigonometry', 'Statistics'] },
-  { id: 3, subject: 'Mathematics', year: 2024, level: 'Ordinary', paper: 'Paper 1', duration: '2h 30m', questions: 10, topics: ['Algebra', 'Number', 'Functions'] },
-  { id: 4, subject: 'English', year: 2024, level: 'Higher', paper: 'Paper 1', duration: '2h 50m', questions: 8, topics: ['Comprehension', 'Language', 'Composition'] },
-  { id: 5, subject: 'English', year: 2024, level: 'Higher', paper: 'Paper 2', duration: '3h 20m', questions: 4, topics: ['Single Text', 'Comparative', 'Poetry'] },
-  { id: 6, subject: 'Irish', year: 2024, level: 'Higher', paper: 'Paper 1', duration: '2h', questions: 6, topics: ['Léamhthuiscint', 'Scríbhneoireacht'] },
-  { id: 7, subject: 'Biology', year: 2024, level: 'Higher', paper: 'Paper 1', duration: '3h', questions: 15, topics: ['Cell Biology', 'Genetics', 'Ecology'] },
-  { id: 8, subject: 'Chemistry', year: 2024, level: 'Higher', paper: 'Paper 1', duration: '3h', questions: 14, topics: ['Atomic Theory', 'Organic', 'Acids & Bases'] },
-  { id: 9, subject: 'Physics', year: 2024, level: 'Higher', paper: 'Paper 1', duration: '3h', questions: 12, topics: ['Mechanics', 'Electricity', 'Modern Physics'] },
-  { id: 10, subject: 'History', year: 2023, level: 'Higher', paper: 'Paper 1', duration: '2h 50m', questions: 6, topics: ['Irish History', 'European History'] },
-  { id: 11, subject: 'Geography', year: 2023, level: 'Higher', paper: 'Paper 1', duration: '2h 50m', questions: 6, topics: ['Physical', 'Regional', 'Human'] },
-  { id: 12, subject: 'Business', year: 2023, level: 'Higher', paper: 'Paper 1', duration: '3h', questions: 8, topics: ['People in Business', 'Enterprise', 'Management'] },
-]
 
 const SUBJECT_COLORS: Record<string, string> = {
   Mathematics: 'from-violet-500 to-purple-600',
@@ -43,18 +29,47 @@ const SUBJECT_COLORS: Record<string, string> = {
 }
 
 export default function PastPapersPage() {
+  const supabase = createClient()
   const [search, setSearch] = useState('')
   const [subject, setSubject] = useState('All')
   const [year, setYear] = useState('All')
   const [level, setLevel] = useState('All')
   const [showFilters, setShowFilters] = useState(false)
+  const [papers, setPapers] = useState<PastPaper[]>([])
+  const [years, setYears] = useState<number[]>([])
+  const [subjects, setSubjects] = useState<string[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const filtered = useMemo(() => PAPERS.filter(p =>
-    (subject === 'All' || p.subject === subject) &&
-    (year === 'All' || p.year === parseInt(year)) &&
-    (level === 'All' || p.level === level) &&
-    (!search || p.subject.toLowerCase().includes(search.toLowerCase()) || p.topics.some(t => t.toLowerCase().includes(search.toLowerCase())))
-  ), [search, subject, year, level])
+  // Load papers from Supabase
+  useEffect(() => {
+    loadPapers()
+  }, [subject, year, level])
+
+  const loadPapers = async () => {
+    setLoading(true)
+    try {
+      const [papersData, yearsData, subjectsData] = await Promise.all([
+        getPastPapers({
+          subject: subject === 'All' ? undefined : subject,
+          year: year === 'All' ? undefined : parseInt(year),
+          level: level === 'All' ? undefined : level as 'Higher' | 'Ordinary',
+        }),
+        getPastPaperYears(),
+        getPastPaperSubjects(),
+      ])
+      setPapers(papersData)
+      setYears(yearsData)
+      setSubjects(subjectsData)
+    } catch (error) {
+      console.error('Error loading papers:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const filtered = useMemo(() => papers.filter(p =>
+    (!search || p.subject.toLowerCase().includes(search.toLowerCase()) || p.topics?.some(t => t.toLowerCase().includes(search.toLowerCase())))
+  ), [search, papers])
 
   const activeFilters = [subject, year, level].filter(f => f !== 'All').length
   const clearFilters = () => { setSubject('All'); setYear('All'); setLevel('All'); setSearch('') }
@@ -70,7 +85,7 @@ export default function PastPapersPage() {
             </div>
             Past Papers
           </h1>
-          <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm">Practice with real SEC exam papers · {PAPERS.length} papers available</p>
+          <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm">Practice with real SEC exam papers · {papers.length} papers available</p>
         </div>
         <Link href="/dashboard/grader" className="btn-primary text-sm shrink-0">
           <Sparkles className="w-4 h-4" />
@@ -116,13 +131,13 @@ export default function PastPapersPage() {
         <div className="grid sm:grid-cols-3 gap-3 mb-5 p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 animate-fade-in-down">
           {[
             { label: 'Subject', value: subject, onChange: setSubject, options: SUBJECTS },
-            { label: 'Year', value: year, onChange: setYear, options: YEARS },
+            { label: 'Year', value: year, onChange: setYear, options: ['All', ...years.map(y => y.toString())] },
             { label: 'Level', value: level, onChange: setLevel, options: LEVELS },
           ].map(f => (
             <div key={f.label}>
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">{f.label}</label>
               <select value={f.value} onChange={e => f.onChange(e.target.value)} className="input text-sm">
-                {f.options.map(o => <option key={o} value={o}>{o}</option>)}
+                {f.options.map((o: string) => <option key={o} value={o}>{o}</option>)}
               </select>
             </div>
           ))}
@@ -170,17 +185,17 @@ export default function PastPapersPage() {
 
                   {/* Subject + paper */}
                   <h3 className="font-display font-bold text-slate-900 dark:text-white mb-0.5">{paper.subject}</h3>
-                  <p className="text-sm text-slate-500 dark:text-slate-400 mb-3">{paper.paper} · {paper.year}</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mb-3">{paper.paper_number ? `Paper ${paper.paper_number}` : 'Paper'} · {paper.year}</p>
 
                   {/* Meta */}
                   <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400 mb-4">
-                    <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" aria-hidden="true" />{paper.duration}</span>
-                    <span className="flex items-center gap-1.5"><BookOpen className="w-3.5 h-3.5" aria-hidden="true" />{paper.questions} questions</span>
+                    <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" aria-hidden="true" />{paper.duration ? `${Math.floor(paper.duration / 60)}h ${paper.duration % 60}m` : 'N/A'}</span>
+                    <span className="flex items-center gap-1.5"><BookOpen className="w-3.5 h-3.5" aria-hidden="true" />{paper.question_count || 0} questions</span>
                   </div>
 
                   {/* Topics */}
                   <div className="flex flex-wrap gap-1.5 mb-4 flex-1">
-                    {paper.topics.map(t => (
+                    {paper.topics?.map(t => (
                       <span key={t} className="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">{t}</span>
                     ))}
                   </div>
