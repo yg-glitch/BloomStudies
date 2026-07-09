@@ -1,4 +1,4 @@
-import { createUniversalClient as createClient } from '@/lib/supabase/universal'
+import { createClient } from '@/lib/supabase/client'
 
 export type Subscription = {
   id: string
@@ -13,7 +13,7 @@ export type Subscription = {
 }
 
 export async function getSubscription(userId: string): Promise<Subscription | null> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('subscriptions')
     .select('*')
@@ -25,7 +25,7 @@ export async function getSubscription(userId: string): Promise<Subscription | nu
 }
 
 export async function createSubscription(userId: string, subscription: Omit<Subscription, 'id' | 'user_id' | 'created_at' | 'updated_at'>): Promise<Subscription | null> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('subscriptions')
     .insert({ user_id: userId, ...subscription })
@@ -37,7 +37,7 @@ export async function createSubscription(userId: string, subscription: Omit<Subs
 }
 
 export async function updateSubscription(userId: string, updates: Partial<Subscription>): Promise<Subscription | null> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('subscriptions')
     .update(updates)

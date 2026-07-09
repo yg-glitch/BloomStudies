@@ -46,7 +46,7 @@ export default function ForgotPassword() {
             </div>
             <h1 className="font-display text-3xl font-black text-slate-900 dark:text-white mb-3">Check your email</h1>
             <p className="text-slate-500 dark:text-slate-400 mb-8">
-              We've sent a password reset link to <strong>{email}</strong>. The link will expire in 24 hours.
+              We&apos;ve sent a password reset link to <strong>{email}</strong>. The link will expire in 24 hours.
             </p>
             <div className="space-y-3">
               <Link href="/auth/signin" className="btn-primary w-full flex items-center justify-center gap-2">
@@ -70,7 +70,7 @@ export default function ForgotPassword() {
             <ArrowLeft className="w-4 h-4" /> Back to Sign In
           </Link>
           <h1 className="font-display text-3xl font-black text-slate-900 dark:text-white mb-2">Reset your password</h1>
-          <p className="text-slate-500 dark:text-slate-400">Enter your email and we'll send you a reset link</p>
+          <p className="text-slate-500 dark:text-slate-400">Enter your email and we&apos;ll send you a reset link</p>
         </div>
 
         {error && (

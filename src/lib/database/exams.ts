@@ -1,4 +1,4 @@
-import { createUniversalClient as createClient } from '@/lib/supabase/universal'
+import { createClient } from '@/lib/supabase/client'
 
 export type Exam = {
   id: string
@@ -22,7 +22,7 @@ export type ExamGrade = {
 }
 
 export async function getExams(userId: string): Promise<Exam[]> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('exams')
     .select('*')
@@ -34,7 +34,7 @@ export async function getExams(userId: string): Promise<Exam[]> {
 }
 
 export async function createExam(userId: string, exam: Omit<Exam, 'id' | 'user_id' | 'created_at'>): Promise<Exam | null> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('exams')
     .insert({ user_id: userId, ...exam })
@@ -46,7 +46,7 @@ export async function createExam(userId: string, exam: Omit<Exam, 'id' | 'user_i
 }
 
 export async function updateExam(examId: string, updates: Partial<Exam>): Promise<Exam | null> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('exams')
     .update(updates)
@@ -59,7 +59,7 @@ export async function updateExam(examId: string, updates: Partial<Exam>): Promis
 }
 
 export async function deleteExam(examId: string): Promise<boolean> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { error } = await supabase
     .from('exams')
     .delete()
@@ -69,7 +69,7 @@ export async function deleteExam(examId: string): Promise<boolean> {
 }
 
 export async function getExamGrades(userId: string, subject?: string): Promise<ExamGrade[]> {
-  const supabase = await createClient()
+  const supabase = createClient()
   let query = supabase
     .from('exam_grades')
     .select('*')
@@ -84,7 +84,7 @@ export async function getExamGrades(userId: string, subject?: string): Promise<E
 }
 
 export async function createExamGrade(userId: string, grade: Omit<ExamGrade, 'id' | 'user_id' | 'created_at'>): Promise<ExamGrade | null> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('exam_grades')
     .insert({ user_id: userId, ...grade })
@@ -96,7 +96,7 @@ export async function createExamGrade(userId: string, grade: Omit<ExamGrade, 'id
 }
 
 export async function getUpcomingExams(userId: string): Promise<Exam[]> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const today = new Date().toISOString().split('T')[0]
   
   const { data, error } = await supabase

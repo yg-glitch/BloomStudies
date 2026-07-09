@@ -126,6 +126,7 @@ export default function ExamGraderPage() {
 
   useEffect(() => {
     loadSubmissions()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const loadSubmissions = async () => {
@@ -136,13 +137,13 @@ export default function ExamGraderPage() {
       const answers = await getGradedAnswers(user.id)
       setSubmissions(answers.map(a => ({
         id: a.id,
-        subject: a.subject,
-        question: a.question,
+        subject: a.subject || '',
+        question: a.question || '',
         studentAnswer: a.student_answer,
         result: a.result as GraderResult,
         timestamp: new Date(a.created_at),
-        educationSystem: a.education_system,
-        level: a.level,
+        educationSystem: a.education_system || '',
+        level: a.level || '',
       })))
     } catch (error) {
       console.error('Error loading submissions:', error)

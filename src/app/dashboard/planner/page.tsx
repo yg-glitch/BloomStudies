@@ -83,6 +83,7 @@ export default function StudyPlannerPage() {
 
   useEffect(() => {
     loadData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const loadData = async () => {
@@ -156,7 +157,7 @@ export default function StudyPlannerPage() {
       if (user) {
         await updateStudySession(id, { completed: !wasComplete })
       }
-      if (!wasComplete) toastXP(10)
+      if (!wasComplete) toastXP(10, 'Session completed')
       toastSuccess(wasComplete ? 'Session marked as incomplete' : 'Session completed! +10 XP')
     } catch (error) {
       toastError('Failed to update session')

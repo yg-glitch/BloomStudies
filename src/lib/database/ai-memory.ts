@@ -1,4 +1,4 @@
-import { createUniversalClient as createClient } from '@/lib/supabase/universal'
+import { createClient } from '@/lib/supabase/client'
 
 export type AIMemory = {
   id: string
@@ -13,7 +13,7 @@ export type AIMemory = {
 }
 
 export async function getAIMemory(userId: string, feature?: string, contextKey?: string): Promise<AIMemory[]> {
-  const supabase = await createClient()
+  const supabase = createClient()
   let query = supabase
     .from('ai_memory')
     .select('*')
@@ -35,7 +35,7 @@ export async function getAIMemory(userId: string, feature?: string, contextKey?:
 }
 
 export async function getRelevantContext(userId: string, subject?: string, limit: number = 10): Promise<any[]> {
-  const supabase = await createClient()
+  const supabase = createClient()
   let query = supabase
     .from('ai_memory')
     .select('*')
@@ -59,7 +59,7 @@ export async function getRelevantContext(userId: string, subject?: string, limit
 }
 
 export async function createAIMemory(userId: string, memory: Omit<AIMemory, 'id' | 'user_id' | 'last_accessed' | 'access_count' | 'created_at'>): Promise<AIMemory | null> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('ai_memory')
     .insert({
@@ -76,7 +76,7 @@ export async function createAIMemory(userId: string, memory: Omit<AIMemory, 'id'
 }
 
 export async function updateAIMemory(id: string, updates: Partial<AIMemory>): Promise<AIMemory | null> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('ai_memory')
     .update({
@@ -92,12 +92,12 @@ export async function updateAIMemory(id: string, updates: Partial<AIMemory>): Pr
 }
 
 export async function incrementAIMemoryAccess(id: string): Promise<void> {
-  const supabase = await createClient()
+  const supabase = createClient()
   await supabase.rpc('increment_ai_memory_access', { memory_id: id })
 }
 
 export async function deleteAIMemory(id: string): Promise<boolean> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { error } = await supabase
     .from('ai_memory')
     .delete()
@@ -107,7 +107,7 @@ export async function deleteAIMemory(id: string): Promise<boolean> {
 }
 
 export async function cleanupOldAIMemory(userId: string, daysToKeep: number = 30): Promise<number> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const cutoffDate = new Date()
   cutoffDate.setDate(cutoffDate.getDate() - daysToKeep)
 

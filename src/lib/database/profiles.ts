@@ -1,4 +1,4 @@
-import { createUniversalClient as createClient } from '@/lib/supabase/universal'
+import { createClient } from '@/lib/supabase/client'
 
 export type Profile = {
   id: string
@@ -18,7 +18,7 @@ export type Profile = {
 }
 
 export async function getProfile(userId: string): Promise<Profile | null> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('profiles')
     .select('*')
@@ -30,7 +30,7 @@ export async function getProfile(userId: string): Promise<Profile | null> {
 }
 
 export async function updateProfile(userId: string, updates: Partial<Profile>): Promise<Profile | null> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('profiles')
     .update(updates)

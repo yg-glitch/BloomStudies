@@ -79,7 +79,52 @@ const MOCK_RESOURCES: Resource[] = [
   { id: 'r8', type: 'guide', title: 'Managing Exam Stress & Study Anxiety', description: 'Practical, science-backed strategies for managing exam pressure and staying mentally strong.', subject: 'Wellbeing', level: 'Both', category: 'wellbeing', tags: ['mental-health', 'stress', 'exams'], wordCount: 3100, views: 18500, likes: 1560, rating: 4.9, ratingCount: 342, thumbnailColor: GRADIENTS[3], isFree: true, publishedAt: new Date(Date.now() - 4 * 86400000).toISOString(), creator: CREATORS[3] },
 ]
 
+import { getLearningResources } from '@/lib/database/learning-resources'
+
 export default function AcademyPage() {
+  const [resources, setResources] = useState<Resource[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const dbResources = await getLearningResources()
+        const formatted = dbResources.map((r: any) => ({
+          id: r.id,
+          type: r.type as ContentType,
+          title: r.title,
+          description: r.description || '',
+          subject: r.subject,
+          level: (r.level === 'higher' ? 'Leaving Cert' : r.level === 'ordinary' ? 'Junior Cycle' : 'Both') as "Junior Cycle" | "Leaving Cert" | "Both",
+          category: r.category as ContentCategory,
+          tags: r.topics || [],
+          duration: r.duration || undefined,
+          views: r.views,
+          likes: r.likes,
+          rating: r.rating,
+          ratingCount: 0,
+          thumbnailColor: r.thumbnail_color || 'from-violet-500 to-purple-600',
+          isFree: true,
+          publishedAt: r.created_at,
+          creator: {
+            name: r.creator_name || 'Bloom Studies',
+            avatar: r.creator_avatar || '🌸',
+            verified: r.creator_verified || false,
+            type: r.creator_type || 'bloom',
+            followers: r.creator_followers || 0
+          },
+          content: r.content || undefined
+        }))
+        setResources(formatted)
+      } catch (e) {
+        console.error(e)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    loadData()
+  }, [])
+
   const [category, setCategory] = useState<ContentCategory>('all')
   const [typeFilter, setTypeFilter] = useState<ContentType | 'all'>('all')
   const [search, setSearch] = useState('')
@@ -94,16 +139,17 @@ export default function AcademyPage() {
   const [activeTab, setActiveTab] = useState<'discover' | 'saved' | 'continue'>('discover')
   const { xp: toastXP } = useToast()
 
-  const filtered = useMemo(() => MOCK_RESOURCES.filter(r => {
+  const filtered = useMemo(() => resources.filter(r => {
     if (category !== 'all' && r.category !== category) return false
     if (typeFilter !== 'all' && r.type !== typeFilter) return false
     if (activeTab === 'saved' && !bookmarks.includes(r.id)) return false
     if (activeTab === 'continue' && !watchHistory[r.id]) return false
     if (search && !r.title.toLowerCase().includes(search.toLowerCase()) && !r.subject.toLowerCase().includes(search.toLowerCase())) return false
     return true
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [category, typeFilter, search, bookmarks, watchHistory, activeTab])
 
-  const inProgress = useMemo(() => MOCK_RESOURCES.filter(r => watchHistory[r.id] && watchHistory[r.id] > 0 && watchHistory[r.id] < 95), [watchHistory])
+  const inProgress = useMemo(() => resources.filter(r => watchHistory[r.id] && watchHistory[r.id] > 0 && watchHistory[r.id] < 95), [resources, watchHistory])
 
   const openResource = (r: Resource) => {
     setActiveResource(r)
@@ -136,6 +182,17 @@ export default function AcademyPage() {
   const toggleBookmark = (id: string) => setBookmarks(prev => prev.includes(id) ? prev.filter(b => b !== id) : [...prev, id])
   const formatViews = (v: number) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v)
   const formatDuration = (m?: number) => m ? `${m} min` : ''
+
+  if (isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-slate-50 dark:bg-slate-950">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-primary-500 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-slate-500 font-medium animate-pulse">Loading academy...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-screen overflow-hidden animate-fade-in">
@@ -253,7 +310,7 @@ export default function AcademyPage() {
                 <h1 className="section-heading">
                   {activeTab === 'discover' ? `${CATEGORIES.find(c => c.key === category)?.emoji || '🌟'} ${CATEGORIES.find(c => c.key === category)?.label || 'Discover'}` : activeTab === 'saved' ? '🔖 Saved' : '▶️ Continue Watching'}
                 </h1>
-                <p className="text-slate-500 dark:text-slate-400 text-sm mt-0.5">Ireland's best free educational resources</p>
+                <p className="text-slate-500 dark:text-slate-400 text-sm mt-0.5">Ireland&apos;s best free educational resources</p>
               </div>
             </div>
 

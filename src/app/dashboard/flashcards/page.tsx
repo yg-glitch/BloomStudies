@@ -95,6 +95,7 @@ export default function FlashcardsPage() {
   // Load decks from Supabase on mount
   useEffect(() => {
     loadDecks()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const loadDecks = async () => {
@@ -287,6 +288,7 @@ export default function FlashcardsPage() {
     }
     setIsFlipped(false)
     setTimeout(() => setCardIndex(i => (i + 1) % currentCards.length), 300)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeDeck, currentCard, currentCards.length, setDecks])
 
   const nextCard = () => { setIsFlipped(false); setShowAnswer(false); setMcqSelected(null); setTfAnswer(null); setFbInputs([]); setCardIndex(i => (i + 1) % (currentCards.length || 1)) }

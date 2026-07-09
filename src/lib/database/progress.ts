@@ -1,4 +1,4 @@
-import { createUniversalClient as createClient } from '@/lib/supabase/universal'
+import { createClient } from '@/lib/supabase/client'
 
 export type Progress = {
   id: string
@@ -12,7 +12,7 @@ export type Progress = {
 }
 
 export async function getProgress(userId: string): Promise<Progress[]> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('progress')
     .select('*')
@@ -23,7 +23,7 @@ export async function getProgress(userId: string): Promise<Progress[]> {
 }
 
 export async function getSubjectProgress(userId: string, subject: string): Promise<Progress | null> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('progress')
     .select('*')
@@ -36,7 +36,7 @@ export async function getSubjectProgress(userId: string, subject: string): Promi
 }
 
 export async function updateProgress(userId: string, subject: string, updates: Partial<Progress>): Promise<Progress | null> {
-  const supabase = await createClient()
+  const supabase = createClient()
   
   // Check if progress exists
   const existing = await getSubjectProgress(userId, subject)

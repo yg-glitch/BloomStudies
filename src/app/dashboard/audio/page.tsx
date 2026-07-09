@@ -69,6 +69,7 @@ export default function AudioLearningPage() {
   // Load lessons from Supabase
   useEffect(() => {
     loadLessons()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const loadLessons = async () => {

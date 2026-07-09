@@ -1,4 +1,4 @@
-import { createUniversalClient as createClient } from '@/lib/supabase/universal'
+import { createClient } from '@/lib/supabase/client'
 
 export type Flashcard = {
   id: string
@@ -29,7 +29,7 @@ export type FlashcardDeck = {
 }
 
 export async function getFlashcardDecks(userId: string): Promise<FlashcardDeck[]> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('flashcard_decks')
     .select('*')
@@ -41,7 +41,7 @@ export async function getFlashcardDecks(userId: string): Promise<FlashcardDeck[]
 }
 
 export async function createFlashcardDeck(userId: string, title: string, subject?: string): Promise<FlashcardDeck | null> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('flashcard_decks')
     .insert({ user_id: userId, title, subject })
@@ -53,7 +53,7 @@ export async function createFlashcardDeck(userId: string, title: string, subject
 }
 
 export async function deleteFlashcardDeck(deckId: string): Promise<boolean> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { error } = await supabase
     .from('flashcard_decks')
     .delete()
@@ -63,7 +63,7 @@ export async function deleteFlashcardDeck(deckId: string): Promise<boolean> {
 }
 
 export async function getFlashcards(userId: string, deckId?: string, subject?: string, folder?: string): Promise<Flashcard[]> {
-  const supabase = await createClient()
+  const supabase = createClient()
   let query = supabase
     .from('flashcards')
     .select('*')
@@ -80,7 +80,7 @@ export async function getFlashcards(userId: string, deckId?: string, subject?: s
 }
 
 export async function getFlashcardsByDeck(deckId: string): Promise<Flashcard[]> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('flashcards')
     .select('*')
@@ -92,7 +92,7 @@ export async function getFlashcardsByDeck(deckId: string): Promise<Flashcard[]> 
 }
 
 export async function getFlashcard(flashcardId: string): Promise<Flashcard | null> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('flashcards')
     .select('*')
@@ -104,7 +104,7 @@ export async function getFlashcard(flashcardId: string): Promise<Flashcard | nul
 }
 
 export async function createFlashcard(userId: string, flashcard: Omit<Flashcard, 'id' | 'user_id' | 'review_count' | 'correct_count' | 'mastery' | 'ease_factor' | 'interval' | 'created_at' | 'updated_at'>): Promise<Flashcard | null> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('flashcards')
     .insert({
@@ -124,7 +124,7 @@ export async function createFlashcard(userId: string, flashcard: Omit<Flashcard,
 }
 
 export async function updateFlashcard(flashcardId: string, updates: Partial<Flashcard>): Promise<Flashcard | null> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('flashcards')
     .update(updates)
@@ -137,7 +137,7 @@ export async function updateFlashcard(flashcardId: string, updates: Partial<Flas
 }
 
 export async function deleteFlashcard(flashcardId: string): Promise<boolean> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { error } = await supabase
     .from('flashcards')
     .delete()
@@ -184,7 +184,7 @@ export async function reviewFlashcard(flashcardId: string, rating: number): Prom
 }
 
 export async function getDueFlashcards(userId: string): Promise<Flashcard[]> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const now = new Date().toISOString()
   
   const { data, error } = await supabase

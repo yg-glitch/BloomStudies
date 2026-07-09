@@ -1,4 +1,4 @@
-import { createUniversalClient as createClient } from '@/lib/supabase/universal'
+import { createClient } from '@/lib/supabase/client'
 
 export type GradedAnswer = {
   id: string
@@ -13,7 +13,7 @@ export type GradedAnswer = {
 }
 
 export async function getGradedAnswers(userId: string, subject?: string): Promise<GradedAnswer[]> {
-  const supabase = await createClient()
+  const supabase = createClient()
   let query = supabase
     .from('graded_answers')
     .select('*')
@@ -36,7 +36,7 @@ export async function createGradedAnswer(
   educationSystem: string,
   level: string
 ): Promise<GradedAnswer | null> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('graded_answers')
     .insert({ 
@@ -56,7 +56,7 @@ export async function createGradedAnswer(
 }
 
 export async function getGradedAnswer(answerId: string): Promise<GradedAnswer | null> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('graded_answers')
     .select('*')
