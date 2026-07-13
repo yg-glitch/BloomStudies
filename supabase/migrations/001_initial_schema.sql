@@ -402,3 +402,106 @@ create policy "Creators can manage own resources"
 create index if not exists idx_learning_resources_type on public.learning_resources(type);
 create index if not exists idx_learning_resources_category on public.learning_resources(category);
 create index if not exists idx_learning_resources_subject on public.learning_resources(subject);
+
+-- ============================================================
+-- COMMUNITY POSTS
+-- ============================================================
+create table if not exists public.community_posts (
+  id uuid default uuid_generate_v4() primary key,
+  user_id uuid references public.profiles(id) on delete cascade not null,
+  community text not null,
+  type text not null default 'text' check (type in ('text', 'poll', 'link', 'image')),
+  title text not null,
+  content text,
+  link_url text,
+  image_url text,
+  poll jsonb,
+  tags text[] default '{}',
+  reactions jsonb default '{"like":0,"helpful":0,"fire":0,"mindblown":0}',
+  comments_count integer default 0,
+  pinned boolean default false,
+  reported boolean default false,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+alter table public.community_posts enable row level security;
+create policy "Anyone can view posts" on public.community_posts for select using (true);
+create policy "Users can create own posts" on public.community_posts for insert with check (auth.uid() = user_id);
+create policy "Users can update own posts" on public.community_posts for update using (auth.uid() = user_id);
+create policy "Users can delete own posts" on public.community_posts for delete using (auth.uid() = user_id);
+create index if not exists idx_community_posts_community on public.community_posts(community);
+create index if not exists idx_community_posts_user_id on public.community_posts(user_id);
+create index if not exists idx_community_posts_created_at on public.community_posts(created_at desc);
+
+-- ============================================================
+-- COMMUNITY COMMENTS
+-- ============================================================
+create table if not exists public.community_comments (
+  id uuid default uuid_generate_v4() primary key,
+  post_id uuid references public.community_posts(id) on delete cascade not null,
+  user_id uuid references public.profiles(id) on delete cascade not null,
+  parent_id uuid references public.community_comments(id) on delete cascade,
+  content text not null,
+  reactions jsonb default '{"like":0,"helpful":0,"fire":0,"mindblown":0}',
+  pinned boolean default false,
+  created_at timestamptz default now()
+);
+
+alter table public.community_comments enable row level security;
+create policy "Anyone can view comments" on public.community_comments for select using (true);
+create policy "Users can create own comments" on public.community_comments for insert with check (auth.uid() = user_id);
+create policy "Users can delete own comments" on public.community_comments for delete using (auth.uid() = user_id);
+create index if not exists idx_community_comments_post_id on public.community_comments(post_id);
+
+-- ============================================================
+-- COMMUNITY REACTIONS (user-specific reactions on posts)
+-- ============================================================
+create table if not exists public.community_reactions (
+  id uuid default uuid_generate_v4() primary key,
+  post_id uuid references public.community_posts(id) on delete cascade not null,
+  user_id uuid references public.profiles(id) on delete cascade not null,
+  reaction text not null check (reaction in ('like','helpful','fire','mindblown')),
+  created_at timestamptz default now(),
+  unique(post_id, user_id)
+);
+
+alter table public.community_reactions enable row level security;
+create policy "Users can manage own reactions" on public.community_reactions for all using (auth.uid() = user_id);
+create index if not exists idx_community_reactions_post_id on public.community_reactions(post_id);
+
+-- ============================================================
+-- COMMUNITY MEMBERSHIPS (joined communities)
+-- ============================================================
+create table if not exists public.community_memberships (
+  id uuid default uuid_generate_v4() primary key,
+  user_id uuid references public.profiles(id) on delete cascade not null,
+  community text not null,
+  created_at timestamptz default now(),
+  unique(user_id, community)
+);
+
+alter table public.community_memberships enable row level security;
+create policy "Users can manage own memberships" on public.community_memberships for all using (auth.uid() = user_id);
+
+-- ============================================================
+-- COMMUNITY BOOKMARKS
+-- ============================================================
+create table if not exists public.community_bookmarks (
+  id uuid default uuid_generate_v4() primary key,
+  user_id uuid references public.profiles(id) on delete cascade not null,
+  post_id uuid references public.community_posts(id) on delete cascade not null,
+  created_at timestamptz default now(),
+  unique(user_id, post_id)
+);
+
+alter table public.community_bookmarks enable row level security;
+create policy "Users can manage own bookmarks" on public.community_bookmarks for all using (auth.uid() = user_id);
+
+-- Helper: increment/decrement comment count on post
+create or replace function increment_comment_count(p_id uuid)
+returns void language plpgsql as $$
+begin
+  update public.community_posts set comments_count = comments_count + 1 where id = p_id;
+end;
+$$;

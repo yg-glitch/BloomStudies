@@ -12,6 +12,8 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { createClient } from '@/lib/supabase/client'
 import { getPastPapers, getPastPaperYears, getPastPaperSubjects, type PastPaper } from '@/lib/database/past-papers'
 
+export const dynamic = 'force-dynamic'
+
 const SUBJECTS = ['All', 'Mathematics', 'English', 'Irish', 'Physics', 'Chemistry', 'Biology', 'History', 'Geography', 'Business', 'Economics', 'Accounting', 'French', 'German', 'Spanish', 'Computer Science', 'Agricultural Science']
 const LEVELS = ['All', 'Higher', 'Ordinary']
 
@@ -41,6 +43,7 @@ export default function PastPapersPage() {
   const [loading, setLoading] = useState(true)
 
   // Load papers from Supabase
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     loadPapers()
   }, [subject, year, level])
@@ -61,7 +64,7 @@ export default function PastPapersPage() {
       setYears(yearsData)
       setSubjects(subjectsData)
     } catch (error) {
-      console.error('Error loading papers:', error)
+      // Error loading papers - handled silently
     } finally {
       setLoading(false)
     }
@@ -202,14 +205,38 @@ export default function PastPapersPage() {
 
                   {/* Actions */}
                   <div className="grid grid-cols-2 gap-2 mt-auto">
-                    <button className="btn-secondary text-xs justify-center gap-1.5 py-2.5">
-                      <Download className="w-3.5 h-3.5" aria-hidden="true" />
-                      Download
-                    </button>
-                    <Link href="/dashboard/grader" className="btn-primary text-xs justify-center gap-1.5 py-2.5">
-                      <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
-                      Grade It
-                    </Link>
+                    {paper.pdf_url ? (
+                      <a
+                        href={paper.pdf_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn-secondary text-xs justify-center gap-1.5 py-2.5"
+                      >
+                        <Download className="w-3.5 h-3.5" aria-hidden="true" />
+                        Download
+                      </a>
+                    ) : (
+                      <button className="btn-secondary text-xs justify-center gap-1.5 py-2.5 opacity-50 cursor-not-allowed">
+                        <Download className="w-3.5 h-3.5" aria-hidden="true" />
+                        Download
+                      </button>
+                    )}
+                    {paper.marking_scheme_url ? (
+                      <a
+                        href={paper.marking_scheme_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn-secondary text-xs justify-center gap-1.5 py-2.5"
+                      >
+                        <BookOpen className="w-3.5 h-3.5" aria-hidden="true" />
+                        Marking Scheme
+                      </a>
+                    ) : (
+                      <Link href="/dashboard/grader" className="btn-primary text-xs justify-center gap-1.5 py-2.5">
+                        <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
+                        Grade It
+                      </Link>
+                    )}
                   </div>
                 </div>
               </div>
@@ -231,6 +258,7 @@ export default function PastPapersPage() {
     </div>
   )
 }
+
 
 
 

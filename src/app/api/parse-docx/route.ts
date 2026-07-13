@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ text: result.value, messages: result.messages })
   } catch (error: any) {
-    console.error('DOCX parse error:', error)
+    // DOCX parse error - handled with response
     return NextResponse.json({ error: 'Failed to parse document: ' + (error.message || 'Unknown error') }, { status: 500 })
   }
 }

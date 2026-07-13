@@ -12,6 +12,8 @@ import { useToast } from '@/components/ui/Toast'
 import { createClient } from '@/lib/supabase/client'
 import { getFlashcards, createFlashcard, updateFlashcard, deleteFlashcard, reviewFlashcard, getDueFlashcards, getFlashcardDecks, getFlashcardsByDeck, createFlashcardDeck, deleteFlashcardDeck } from '@/lib/database/flashcards'
 
+export const dynamic = 'force-dynamic'
+
 interface Flashcard {
   id: string
   front: string
@@ -93,11 +95,7 @@ export default function FlashcardsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Load decks from Supabase on mount
-  useEffect(() => {
-    loadDecks()
-  }, [])
-
-  const loadDecks = async () => {
+  const loadDecks = useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
@@ -132,11 +130,15 @@ export default function FlashcardsPage() {
 
       setDecks(decksWithCards)
     } catch (error) {
-      console.error('Error loading decks:', error)
+      // Error loading decks - handled silently
     } finally {
       setLoading(false)
     }
-  }
+  }, [supabase])
+
+  useEffect(() => {
+    loadDecks()
+  }, [loadDecks])
 
   // Build spaced repetition queue — cards due today first, then by mastery
   useEffect(() => {
@@ -287,7 +289,7 @@ export default function FlashcardsPage() {
     }
     setIsFlipped(false)
     setTimeout(() => setCardIndex(i => (i + 1) % currentCards.length), 300)
-  }, [activeDeck, currentCard, currentCards.length, setDecks])
+  }, [activeDeck, currentCard, currentCards.length, setDecks, toastXP, toastAchievement])
 
   const nextCard = () => { setIsFlipped(false); setShowAnswer(false); setMcqSelected(null); setTfAnswer(null); setFbInputs([]); setCardIndex(i => (i + 1) % (currentCards.length || 1)) }
   const prevCard = () => { setIsFlipped(false); setShowAnswer(false); setMcqSelected(null); setTfAnswer(null); setFbInputs([]); setCardIndex(i => (i - 1 + (currentCards.length || 1)) % (currentCards.length || 1)) }

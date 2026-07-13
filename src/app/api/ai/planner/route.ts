@@ -113,7 +113,7 @@ Respond with ONLY valid JSON:
 
     return NextResponse.json(parsed)
   } catch (error: any) {
-    console.error('Planner API error:', error)
+    // Planner API error - handled with response
     return NextResponse.json({ error: error.message || 'Failed to generate plan' }, { status: 500 })
   }
 }

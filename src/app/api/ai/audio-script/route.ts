@@ -74,7 +74,7 @@ Respond with ONLY valid JSON in this exact format:
 
     return NextResponse.json(parsed)
   } catch (error: any) {
-    console.error('Audio script error:', error)
+    // Audio script error - handled with response
     return NextResponse.json({ error: error.message || 'Failed to generate script' }, { status: 500 })
   }
 }

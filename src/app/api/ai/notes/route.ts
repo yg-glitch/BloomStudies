@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ result: text, action })
   } catch (error: any) {
-    console.error('Notes AI error:', error)
+    // Notes AI error - handled with response
     return NextResponse.json({ error: error.message || 'Failed to process notes' }, { status: 500 })
   }
 }

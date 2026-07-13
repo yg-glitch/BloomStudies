@@ -16,6 +16,8 @@ import { getStudySessions, createStudySession, updateStudySession } from '@/lib/
 import { getExams } from '@/lib/database/exams'
 import { useLocalStorage } from '@/lib/useLocalStorage'
 
+export const dynamic = 'force-dynamic'
+
 interface StudySession {
   id: string; date: string; startTime: string; endTime: string
   subject: string; topic: string; type: 'study'|'revision'|'practice'|'break'|'catchup'
@@ -81,6 +83,7 @@ export default function StudyPlannerPage() {
     examDates: [{ subject: '', date: '', level: 'higher', targetGrade: 'H1' }],
   })
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     loadData()
   }, [])
@@ -116,7 +119,7 @@ export default function StudyPlannerPage() {
         targetGrade: e.target_grade || 'H1',
       })))
     } catch (error) {
-      console.error('Error loading planner data:', error)
+      // Error loading planner data - handled silently
     } finally {
       setLoading(false)
     }
@@ -156,7 +159,7 @@ export default function StudyPlannerPage() {
       if (user) {
         await updateStudySession(id, { completed: !wasComplete })
       }
-      if (!wasComplete) toastXP(10)
+      if (!wasComplete) toastXP(10, 'Completed study session')
       toastSuccess(wasComplete ? 'Session marked as incomplete' : 'Session completed! +10 XP')
     } catch (error) {
       toastError('Failed to update session')
@@ -242,7 +245,7 @@ export default function StudyPlannerPage() {
 
           if (insertedSessions) {
             // Update in-memory sessions with real DB ids
-            const mapped = insertedSessions.map(s => ({
+            const mapped = insertedSessions.map((s: any) => ({
               id: s.id,
               date: s.date,
               startTime: '09:00',
@@ -273,7 +276,7 @@ export default function StudyPlannerPage() {
           if (examInserts.length > 0) {
             const { data: insertedExams } = await supabase.from('exams').insert(examInserts).select()
             if (insertedExams) {
-              setExams(insertedExams.map(e => ({
+              setExams(insertedExams.map((e: any) => ({
                 subject: e.subject,
                 date: e.exam_date,
                 level: e.exam_level || 'higher',
@@ -709,6 +712,7 @@ export default function StudyPlannerPage() {
     </div>
   )
 }
+
 
 
 

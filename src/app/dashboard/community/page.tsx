@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import {
   Users, Plus, Search, Bookmark, MessageCircle, Share2,
   Sparkles, X, Send, Trophy, Crown, Shield, Check, Filter,
@@ -10,15 +10,23 @@ import {
   AlertTriangle, BookOpen, Hash, Bell, Settings as SettingsIcon
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useLocalStorage } from '@/lib/useLocalStorage'
 import MarkdownRenderer from '@/components/ui/MarkdownRenderer'
 import { useToast } from '@/components/ui/Toast'
+import { createClient } from '@/lib/supabase/client'
+import { getProfile } from '@/lib/database/profiles'
 import {
-  CommunityPost, CommunityUser, PostComment,
+  getCommunityPosts, createCommunityPost, getCommunityComments, createCommunityComment,
+  updateCommunityPostReaction, getJoinedCommunities, joinCommunity, leaveCommunity,
+  getBookmarkedPosts, bookmarkPost, unbookmarkPost, reportPost,
+  CommunityPost, CommunityComment
+} from '@/lib/database/community'
+import {
   ALL_COMMUNITIES, JC_COMMUNITIES, LC_COMMUNITIES,
   BADGE_INFO, LEVEL_COLORS, XP_PER_LEVEL,
-  generateMockPosts, generateMockUser, BadgeType, Reaction
+  BadgeType, Reaction, UserLevel
 } from '@/lib/community'
+
+export const dynamic = 'force-dynamic'
 
 const REACTION_INFO: Record<Reaction, { emoji: string; label: string }> = {
   like: { emoji: '👍', label: 'Like' },
@@ -36,9 +44,10 @@ const COUNTIES = ['Antrim','Armagh','Carlow','Cavan','Clare','Cork','Derry','Don
 const YEARS = ['Junior Cycle 1','Junior Cycle 2','Junior Cycle 3','5th Year','6th Year','Other'] as const
 
 export default function CommunityPage() {
-  const [user] = useState<CommunityUser>(generateMockUser)
-  const [posts, setPosts] = useLocalStorage<CommunityPost[]>('bloom-community-posts', generateMockPosts())
-  const [comments, setComments] = useLocalStorage<Record<string, PostComment[]>>('bloom-community-comments', {})
+  const supabase = createClient()
+  const [user, setUser] = useState<any>(null)
+  const [posts, setPosts] = useState<CommunityPost[]>([])
+  const [comments, setComments] = useState<Record<string, CommunityComment[]>>({})
   const [activeCommunity, setActiveCommunity] = useState<string | null>(null)
   const [sort, setSort] = useState<SortOption>('Hot')
   const [view, setView] = useState<View>('feed')
@@ -46,11 +55,56 @@ export default function CommunityPage() {
   const [composeTab, setComposeTab] = useState<ComposeTab>('text')
   const [expandedPost, setExpandedPost] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
-  const [joinedCommunities, setJoinedCommunities] = useLocalStorage<string[]>('bloom-joined-communities', user.joinedCommunities)
-  const [bookmarkedPosts, setBookmarkedPosts] = useLocalStorage<string[]>('bloom-bookmarked-posts', [])
-  const [reportedPosts, setReportedPosts] = useLocalStorage<string[]>('bloom-reported-posts', [])
+  const [joinedCommunities, setJoinedCommunities] = useState<string[]>([])
+  const [bookmarkedPosts, setBookmarkedPosts] = useState<string[]>([])
+  const [reportedPosts, setReportedPosts] = useState<string[]>([])
   const [aiPanel, setAiPanel] = useState<{ postId: string; result: string; loading: boolean; action: string } | null>(null)
+  const [loading, setLoading] = useState(true)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const loadUserData = useCallback(async () => {
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      if (authUser) {
+        const profile = await getProfile(authUser.id)
+        setUser({ ...authUser, ...profile })
+        
+        const [joined, bookmarked] = await Promise.all([
+          getJoinedCommunities(authUser.id),
+          getBookmarkedPosts(authUser.id),
+        ])
+        setJoinedCommunities(joined)
+        setBookmarkedPosts(bookmarked)
+      }
+    } catch (error) {
+      // Error loading user data - handled silently
+    }
+  }, [supabase])
+
+  const loadPosts = useCallback(async () => {
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      const loadedPosts = await getCommunityPosts(authUser?.id, activeCommunity || undefined)
+      setPosts(loadedPosts)
+      
+      // Load comments for all posts
+      const commentsData: Record<string, CommunityComment[]> = {}
+      for (const post of loadedPosts) {
+        const postComments = await getCommunityComments(post.id)
+        commentsData[post.id] = postComments
+      }
+      setComments(commentsData)
+    } catch (error) {
+      // Error loading posts - handled silently
+    } finally {
+      setLoading(false)
+    }
+  }, [supabase, activeCommunity])
+
+  useEffect(() => {
+    loadUserData()
+    loadPosts()
+  }, [loadUserData, loadPosts])
 
   // Compose state
   const [composeTitle, setComposeTitle] = useState('')
@@ -63,44 +117,53 @@ export default function CommunityPage() {
 
   const filteredPosts = posts.filter(p => {
     if (activeCommunity && p.community !== activeCommunity) return false
-    if (searchQuery && !p.title.toLowerCase().includes(searchQuery.toLowerCase()) && !p.content.toLowerCase().includes(searchQuery.toLowerCase())) return false
+    if (searchQuery && !p.title.toLowerCase().includes(searchQuery.toLowerCase()) && !(p.content || '').toLowerCase().includes(searchQuery.toLowerCase())) return false
     return true
   }).sort((a, b) => {
-    if (sort === 'New') return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    if (sort === 'New') return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     if (sort === 'Top') return totalScore(b) - totalScore(a)
-    const ageA = (Date.now() - new Date(a.createdAt).getTime()) / 3600000
-    const ageB = (Date.now() - new Date(b.createdAt).getTime()) / 3600000
+    const ageA = (Date.now() - new Date(a.created_at).getTime()) / 3600000
+    const ageB = (Date.now() - new Date(b.created_at).getTime()) / 3600000
     return (totalScore(b) / (ageB + 2)) - (totalScore(a) / (ageA + 2))
   })
 
   function totalScore(p: CommunityPost) { return Object.values(p.reactions).reduce((s, v) => s + v, 0) }
 
-  const handleReact = (postId: string, reaction: Reaction) => {
+  const handleReact = async (postId: string, reaction: Reaction) => {
+    const { data: { user: authUser } } = await supabase.auth.getUser()
+    if (!authUser) return
+    
+    const currentReaction = posts.find(p => p.id === postId)?.user_reaction
+    const newReaction = currentReaction === reaction ? null : reaction
+    
+    await updateCommunityPostReaction(postId, authUser.id, newReaction)
+    
     setPosts(prev => prev.map(p => {
       if (p.id !== postId) return p
-      const prev_reaction = p.userReaction
-      const wasSame = prev_reaction === reaction
-      return {
-        ...p,
-        userReaction: wasSame ? undefined : reaction,
-        reactions: {
-          ...p.reactions,
-          [reaction]: p.reactions[reaction] + (wasSame ? -1 : 1),
-          ...(prev_reaction && !wasSame ? { [prev_reaction]: Math.max(0, p.reactions[prev_reaction] - 1) } : {}),
-        },
+      const reactions = { ...p.reactions }
+      if (currentReaction && currentReaction !== reaction) {
+        reactions[currentReaction as keyof typeof reactions] = Math.max(0, reactions[currentReaction as keyof typeof reactions] - 1)
       }
+      if (reaction && reaction !== currentReaction) {
+        reactions[reaction as keyof typeof reactions] = (reactions[reaction as keyof typeof reactions] || 0) + 1
+      }
+      return { ...p, user_reaction: newReaction, reactions }
     }))
   }
 
   const handleVotePoll = (postId: string, idx: number) => {
     setPosts(prev => prev.map(p => {
       if (p.id !== postId || !p.poll || p.poll.userVoted !== undefined) return p
-      const newOptions = p.poll.options.map((o, i) => i === idx ? { ...o, votes: o.votes + 1 } : o)
+      const newOptions = p.poll.options.map((o: any, i: number) => i === idx ? { ...o, votes: o.votes + 1 } : o)
       return { ...p, poll: { ...p.poll, options: newOptions, totalVotes: p.poll.totalVotes + 1, userVoted: idx } }
     }))
   }
 
-  const handleReport = (postId: string) => {
+  const handleReport = async (postId: string) => {
+    const { data: { user: authUser } } = await supabase.auth.getUser()
+    if (!authUser) return
+    
+    await reportPost(authUser.id, postId)
     setReportedPosts(prev => prev.includes(postId) ? prev : [...prev, postId])
     toastSuccess('Post reported', 'Our AI moderation team will review it shortly')
   }
@@ -115,26 +178,40 @@ export default function CommunityPage() {
 
   const { xp: toastXP, success: toastSuccess } = useToast()
 
-  const handlePost = () => {
-    if (!composeTitle.trim() || !composeCommunity) return
+  const handlePost = async () => {
+    const { data: { user: authUser } } = await supabase.auth.getUser()
+    if (!authUser || !composeTitle.trim() || !composeCommunity) return
+    
     setIsPosting(true)
-    const newPost: CommunityPost = {
-      id: Date.now().toString(), authorId: user.id,
-      author: { id: user.id, name: user.name, avatar: user.avatar, level: user.level, badges: user.badges, bloomScore: user.bloomScore },
-      community: composeCommunity,
-      type: composeTab === 'poll' ? 'poll' : composeTab === 'link' ? 'link' : composeTab === 'image' ? 'image' : 'text',
-      title: composeTitle, content: composeContent,
-      ...(composeTab === 'link' && { linkUrl: composeLinkUrl }),
-      ...(composeTab === 'image' && { imageUrl: composeImageUrl }),
-      ...(composeTab === 'poll' && { poll: { question: composeTitle, options: pollOptions.filter(o => o.trim()).map(o => ({ text: o, votes: 0 })), totalVotes: 0 } }),
-      tags: [], reactions: { like: 0, helpful: 0, fire: 0, mindblown: 0 },
-      commentsCount: 0, bookmarked: false, pinned: false, createdAt: new Date().toISOString(),
+    try {
+      const newPost = await createCommunityPost(
+        authUser.id,
+        composeCommunity,
+        composeTab,
+        composeTitle,
+        composeContent,
+        composeLinkUrl,
+        composeImageUrl,
+        composeTab === 'poll' ? { question: composeTitle, options: pollOptions.filter((o: string) => o.trim()).map((o: string) => ({ text: o, votes: 0 })), totalVotes: 0 } : undefined
+      )
+      
+      if (newPost) {
+        setPosts(prev => [newPost, ...prev])
+        setShowCompose(false)
+        setComposeTitle('')
+        setComposeContent('')
+        setComposeCommunity('')
+        setComposeLinkUrl('')
+        setComposeImageUrl('')
+        setPollOptions(['', ''])
+        toastSuccess('Post published!', 'Your post is now live in the community')
+        toastXP(15, 'Posted to community')
+      }
+    } catch (error) {
+      // Error creating post - handled silently
+    } finally {
+      setIsPosting(false)
     }
-    setPosts(prev => [newPost, ...prev])
-    setShowCompose(false); setComposeTitle(''); setComposeContent(''); setComposeCommunity('')
-    setComposeLinkUrl(''); setComposeImageUrl(''); setPollOptions(['', '']); setIsPosting(false)
-    toastSuccess('Post published!', 'Your post is now live in the community')
-    toastXP(15, 'Posted to community')
   }
 
   const handleAIAction = async (post: CommunityPost, action: string) => {
@@ -154,8 +231,67 @@ export default function CommunityPage() {
     } catch { setAiPanel(p => p ? { ...p, loading: false, result: 'Failed to load AI response.' } : null) }
   }
 
-  const formatTime = (iso: string) => { const d = (Date.now() - new Date(iso).getTime()) / 1000; if (d < 60) return 'just now'; if (d < 3600) return `${Math.floor(d / 60)}m`; if (d < 86400) return `${Math.floor(d / 3600)}h`; return `${Math.floor(d / 86400)}d` }
+  const handleJoinCommunity = async (community: string) => {
+    const { data: { user: authUser } } = await supabase.auth.getUser()
+    if (!authUser) return
+    
+    if (joinedCommunities.includes(community)) {
+      await leaveCommunity(authUser.id, community)
+      setJoinedCommunities(prev => prev.filter(c => c !== community))
+    } else {
+      await joinCommunity(authUser.id, community)
+      setJoinedCommunities(prev => [...prev, community])
+    }
+  }
+
+  const handleBookmark = async (postId: string) => {
+    const { data: { user: authUser } } = await supabase.auth.getUser()
+    if (!authUser) return
+    
+    if (bookmarkedPosts.includes(postId)) {
+      await unbookmarkPost(authUser.id, postId)
+      setBookmarkedPosts(prev => prev.filter(id => id !== postId))
+    } else {
+      await bookmarkPost(authUser.id, postId)
+      setBookmarkedPosts(prev => [...prev, postId])
+    }
+  }
+
+  const handleAddComment = async (postId: string, text: string, parentId?: string) => {
+    const { data: { user: authUser } } = await supabase.auth.getUser()
+    if (!authUser || !text.trim()) return
+    
+    try {
+      const newComment = await createCommunityComment(postId, authUser.id, text, parentId)
+      if (newComment) {
+        setComments(prev => ({ ...prev, [postId]: [...(prev[postId] || []), newComment] }))
+        setPosts(prev => prev.map(p => p.id === postId ? { ...p, comments_count: p.comments_count + 1 } : p))
+      }
+    } catch (error) {
+      // Error adding comment - handled silently
+    }
+  }
+
+  const formatTime = (iso: string) => { 
+    const d = (Date.now() - new Date(iso).getTime()) / 1000
+    if (d < 60) return 'just now'
+    if (d < 3600) return `${Math.floor(d / 60)}m`
+    if (d < 86400) return `${Math.floor(d / 3600)}h`
+    return `${Math.floor(d / 86400)}d`
+  }
+  
   const getCommunity = (key: string) => ALL_COMMUNITIES.find(c => c.key === key)
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-slate-50 dark:bg-slate-950">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-slate-500 dark:text-slate-400">Loading community...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-screen overflow-hidden animate-fade-in bg-slate-50 dark:bg-slate-950">
@@ -202,7 +338,7 @@ export default function CommunityPage() {
               <div className={cn('p-5 rounded-2xl bg-gradient-to-br from-primary-500 to-accent-600 text-white shadow-xl shadow-primary-500/20')}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3"><span className="text-4xl">{c.emoji}</span><div><h2 className="font-display text-xl font-bold">{c.name}</h2><p className="text-white/70 text-sm">{c.level} · {posts.filter(p => p.community === activeCommunity).length} posts</p></div></div>
-                  <button onClick={() => setJoinedCommunities(prev => prev.includes(activeCommunity) ? prev.filter(k => k !== activeCommunity) : [...prev, activeCommunity])} className={cn('px-4 py-2 rounded-xl text-sm font-bold transition-all', joinedCommunities.includes(activeCommunity) ? 'bg-white/20 hover:bg-white/30' : 'bg-white text-primary-700 hover:shadow-lg')}>{joinedCommunities.includes(activeCommunity) ? '✓ Joined' : '+ Join'}</button>
+                  <button onClick={() => handleJoinCommunity(activeCommunity)} className={cn('px-4 py-2 rounded-xl text-sm font-bold transition-all', joinedCommunities.includes(activeCommunity) ? 'bg-white/20 hover:bg-white/30' : 'bg-white text-primary-700 hover:shadow-lg')}>{joinedCommunities.includes(activeCommunity) ? '✓ Joined' : '+ Join'}</button>
                 </div>
               </div>
             )})()}
@@ -215,13 +351,8 @@ export default function CommunityPage() {
             {filteredPosts.map(post => !reportedPosts.includes(post.id) && (
               <PostCard key={post.id} post={post} bookmarked={bookmarkedPosts.includes(post.id)} comments={comments[post.id] || []}
                 expanded={expandedPost === post.id} onToggleExpand={() => setExpandedPost(prev => prev === post.id ? null : post.id)}
-                onReact={handleReact} onBookmark={id => setBookmarkedPosts(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])}
-                onVotePoll={handleVotePoll} onReport={handleReport} onAIAction={handleAIAction}
-                onAddComment={(postId, text, parentId) => {
-                  const c: PostComment = { id: Date.now().toString(), postId, authorId: user.id, author: { id: user.id, name: user.name, avatar: user.avatar, level: user.level, badges: user.badges }, content: text, reactions: { like: 0, helpful: 0, fire: 0, mindblown: 0 }, replies: [], pinned: false, createdAt: new Date().toISOString() }
-                  setComments(prev => ({ ...prev, [postId]: [...(prev[postId] || []), c] }))
-                  setPosts(prev => prev.map(p => p.id === postId ? { ...p, commentsCount: p.commentsCount + 1 } : p))
-                }}
+                onReact={handleReact} onBookmark={handleBookmark} onVotePoll={handleVotePoll} onReport={handleReport} onAIAction={handleAIAction}
+                onAddComment={handleAddComment}
                 getCommunity={getCommunity} formatTime={formatTime} aiPanel={aiPanel} />
             ))}
             {filteredPosts.length === 0 && <div className="text-center py-16 text-slate-400"><Users className="w-12 h-12 mx-auto mb-3 opacity-30" /><p className="font-medium">No posts yet</p><button onClick={() => setShowCompose(true)} className="mt-4 px-6 py-2.5 rounded-xl bg-gradient-to-r from-primary-600 to-accent-500 text-white text-sm font-semibold hover:shadow-lg transition-all">Create First Post</button></div>}
@@ -259,13 +390,13 @@ export default function CommunityPage() {
               </div>
             </div>
             <div className="p-5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-              <div className="flex items-center justify-between mb-2"><span className={cn('font-semibold', LEVEL_COLORS[user.level])}>{user.level}</span><span className="text-sm text-slate-500">{user.xp} XP</span></div>
+              <div className="flex items-center justify-between mb-2"><span className={cn('font-semibold', LEVEL_COLORS[user.level as UserLevel] || 'text-slate-600')}>{user.level}</span><span className="text-sm text-slate-500">{user.xp} XP</span></div>
               <div className="h-3 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden"><div className="h-full bg-gradient-to-r from-primary-500 to-accent-500" style={{ width:`${(user.xp%XP_PER_LEVEL)/XP_PER_LEVEL*100}%` }} /></div>
               <div className="text-xs text-slate-400 mt-1">{XP_PER_LEVEL-(user.xp%XP_PER_LEVEL)} XP to next level</div>
             </div>
             <div className="p-5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
               <h3 className="font-semibold text-slate-900 dark:text-white mb-3">🏅 Badges</h3>
-              <div className="flex flex-wrap gap-2">{user.badges.map(b=><div key={b} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary-50 dark:bg-primary-950/30 border border-primary-200 dark:border-primary-800 text-xs"><span>{BADGE_INFO[b].emoji}</span><span className="text-primary-700 dark:text-primary-400 font-medium">{BADGE_INFO[b].label}</span></div>)}</div>
+              <div className="flex flex-wrap gap-2">{user.badges.map((b: BadgeType)=><div key={b} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary-50 dark:bg-primary-950/30 border border-primary-200 dark:border-primary-800 text-xs"><span>{BADGE_INFO[b].emoji}</span><span className="text-primary-700 dark:text-primary-400 font-medium">{BADGE_INFO[b].label}</span></div>)}</div>
             </div>
           </div>
         )}
@@ -357,7 +488,7 @@ export default function CommunityPage() {
 
 // ─── PostCard ───────────────────────────────────────────────────────────────
 function PostCard({ post, bookmarked, comments, expanded, onToggleExpand, onReact, onBookmark, onVotePoll, onReport, onAIAction, onAddComment, getCommunity, formatTime, aiPanel }: {
-  post: CommunityPost; bookmarked: boolean; comments: PostComment[]
+  post: CommunityPost; bookmarked: boolean; comments: CommunityComment[]
   expanded: boolean; onToggleExpand: () => void
   onReact: (id: string, r: Reaction) => void
   onBookmark: (id: string) => void
@@ -387,22 +518,17 @@ function PostCard({ post, bookmarked, comments, expanded, onToggleExpand, onReac
     <div className={cn('rounded-2xl border bg-white dark:bg-slate-800 transition-all hover:shadow-lg', post.pinned ? 'border-primary-300 dark:border-primary-700' : 'border-slate-200 dark:border-slate-700')}>
       {post.pinned && <div className="flex items-center gap-1.5 px-4 pt-3 text-xs text-primary-600 dark:text-primary-400 font-medium"><Pin className="w-3 h-3" /> Pinned</div>}
       <div className="p-4">
-        {/* Author row */}
+        {/* Author row - simplified for now */}
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-lg shrink-0">{post.author.avatar}</div>
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-lg shrink-0">👤</div>
             <div>
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="font-semibold text-slate-900 dark:text-white text-sm">{post.author.name}</span>
-                {post.author.badges.includes('verified_teacher') && <span className="text-blue-500 text-xs">✅</span>}
-                {post.author.badges.includes('verified_tutor') && <span className="text-emerald-500 text-xs">✅</span>}
-                {post.author.badges.includes('moderator') && <Shield className="w-3 h-3 text-violet-500" />}
-                <span className={cn('text-xs', LEVEL_COLORS[post.author.level])}>{post.author.level}</span>
-                <span className="text-xs text-amber-500">⭐ {post.author.bloomScore}</span>
+                <span className="font-semibold text-slate-900 dark:text-white text-sm">Student</span>
+                <span className="text-xs text-slate-400">{formatTime(post.created_at)}</span>
               </div>
               <div className="flex items-center gap-1.5 text-xs text-slate-400 mt-0.5">
                 {community && <span>{community.emoji} {community.name}</span>}
-                <span>·</span><span>{formatTime(post.createdAt)}</span>
               </div>
             </div>
           </div>
@@ -433,94 +559,98 @@ function PostCard({ post, bookmarked, comments, expanded, onToggleExpand, onReac
         <h3 className="font-semibold text-slate-900 dark:text-white mb-2 leading-snug">{post.title}</h3>
         {post.content && (
           <div className={cn('text-sm text-slate-700 dark:text-slate-300', !expanded && post.content.length > 280 && 'line-clamp-3')}>
-            <MarkdownRenderer content={post.content} />
+            <MarkdownRenderer content={post.content || ''} />
           </div>
         )}
-        {post.content.length > 280 && <button onClick={onToggleExpand} className="text-xs text-primary-600 dark:text-primary-400 mt-1 hover:underline">{expanded ? 'Show less' : 'Read more'}</button>}
+        {post.content && post.content.length > 280 && <button onClick={onToggleExpand} className="text-xs text-primary-600 dark:text-primary-400 mt-1 hover:underline">{expanded ? 'Show less' : 'Read more'}</button>}
 
         {/* Image */}
-        {post.imageUrl && post.imageUrl.startsWith('data:image') && (
+        {post.image_url && post.image_url.startsWith('data:image') && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={post.imageUrl} alt="" className="mt-3 rounded-xl max-h-64 object-cover w-full" />
+          <img src={post.image_url} alt="post image" className="mt-3 rounded-xl max-h-96 object-cover w-full" />
         )}
 
         {/* Link */}
-        {post.linkUrl && (
-          <a href={post.linkUrl} target="_blank" rel="noopener noreferrer" className="mt-3 flex items-center gap-2 p-3 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-primary-400 transition-colors text-sm text-primary-600 dark:text-primary-400">
-            <LinkIcon className="w-4 h-4 shrink-0" /><span className="truncate">{post.linkUrl}</span>
+        {post.link_url && (
+          <a href={post.link_url} target="_blank" rel="noopener noreferrer" className="mt-3 flex items-center gap-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-primary-400 transition-colors">
+            <LinkIcon className="w-4 h-4 text-slate-400" />
+            <span className="text-sm text-slate-600 dark:text-slate-300 truncate">{post.link_url}</span>
           </a>
         )}
 
         {/* Poll */}
-        {post.type === 'poll' && post.poll && (
+        {post.poll && (
           <div className="mt-3 space-y-2">
-            {post.poll.options.map((opt, i) => {
-              const pct = post.poll!.totalVotes > 0 ? Math.round((opt.votes / post.poll!.totalVotes) * 100) : 0
-              const voted = post.poll!.userVoted !== undefined
-              return (
-                <button key={i} onClick={() => !voted && onVotePoll(post.id, i)} disabled={voted}
-                  className={cn('w-full text-left px-4 py-2.5 rounded-xl border-2 relative overflow-hidden transition-all', post.poll!.userVoted === i ? 'border-primary-500' : voted ? 'border-slate-200 dark:border-slate-700' : 'border-slate-200 dark:border-slate-700 hover:border-primary-400')}>
-                  {voted && <div className="absolute inset-0 bg-primary-500/10 transition-all rounded-xl" style={{ width:`${pct}%` }} />}
-                  <div className="relative flex justify-between"><span className="text-sm font-medium text-slate-900 dark:text-white">{opt.text}</span>{voted && <span className="text-sm font-bold text-primary-600 dark:text-primary-400">{pct}%</span>}</div>
+            {post.poll.options?.map((opt: any, i: number) => (
+              <div key={i} className="relative">
+                <button
+                  onClick={() => onVotePoll(post.id, i)}
+                  disabled={post.poll.userVoted !== undefined}
+                  className={cn('w-full text-left px-4 py-2.5 rounded-xl border-2 transition-all text-sm', post.poll.userVoted === i ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/30' : 'border-slate-200 dark:border-slate-700 hover:border-primary-300 disabled:opacity-50')}
+                >
+                  <div className="flex justify-between">
+                    <span>{opt.text}</span>
+                    <span className="text-slate-500">{post.poll.totalVotes > 0 ? Math.round((opt.votes / post.poll.totalVotes) * 100) : 0}%</span>
+                  </div>
+                  {post.poll.totalVotes > 0 && (
+                    <div className="absolute inset-0 pointer-events-none">
+                      <div className="h-full bg-primary-100 dark:bg-primary-950/20 rounded-lg" style={{ width: `${(opt.votes / post.poll.totalVotes) * 100}%` }} />
+                    </div>
+                  )}
                 </button>
-              )
-            })}
-            <p className="text-xs text-slate-400">{post.poll.totalVotes} votes</p>
+              </div>
+            ))}
           </div>
         )}
 
-        {/* Tags */}
-        {post.tags.length > 0 && <div className="flex flex-wrap gap-1.5 mt-3">{post.tags.map(t=><span key={t} className="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500">#{t}</span>)}</div>}
-
-        {/* Action bar */}
-        <div className="flex items-center gap-1 mt-4 pt-3 border-t border-slate-100 dark:border-slate-700">
-          {(Object.entries(REACTION_INFO) as [Reaction, any][]).map(([r, info]) => (
-            <button key={r} onClick={() => onReact(post.id, r)} className={cn('flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all', post.userReaction === r ? 'bg-primary-100 dark:bg-primary-950/50 text-primary-600 dark:text-primary-400 scale-105' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700')}>
-              {info.emoji}{post.reactions[r] > 0 && <span>{post.reactions[r]}</span>}
+        {/* Reactions */}
+        <div className="flex items-center gap-1 mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
+          {Object.entries(REACTION_INFO).map(([key, info]) => (
+            <button
+              key={key}
+              onClick={() => onReact(post.id, key as Reaction)}
+              className={cn('flex items-center gap-1 px-2 py-1 rounded-lg text-xs transition-all', post.user_reaction === key ? 'bg-primary-100 dark:bg-primary-950/30 text-primary-600 dark:text-primary-400' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700')}
+            >
+              <span>{info.emoji}</span>
+              <span>{post.reactions[key as keyof typeof post.reactions]}</span>
             </button>
           ))}
-          <button onClick={onToggleExpand} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors ml-1">
-            <MessageCircle className="w-3.5 h-3.5" />{comments.length > 0 && comments.length}
-          </button>
-          <button onClick={() => onBookmark(post.id)} className={cn('ml-auto p-1.5 rounded-lg transition-colors', bookmarked ? 'text-primary-500' : 'text-slate-400 hover:text-slate-600')}>
+          <button onClick={() => onBookmark(post.id)} className={cn('flex items-center gap-1 px-2 py-1 rounded-lg text-xs transition-all ml-auto', bookmarked ? 'text-primary-600 dark:text-primary-400' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700')}>
             <Bookmark className={cn('w-4 h-4', bookmarked && 'fill-current')} />
+          </button>
+          <button onClick={onToggleExpand} className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all">
+            <MessageCircle className="w-4 h-4" />
+            <span>{post.comments_count}</span>
           </button>
         </div>
 
-        {/* Comments section */}
+        {/* Comments */}
         {expanded && (
-          <div className="mt-4 space-y-3 border-t border-slate-100 dark:border-slate-700 pt-4">
-            {comments.map(c => (
-              <div key={c.id} className="flex gap-2.5">
-                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary-400 to-accent-400 flex items-center justify-center text-sm shrink-0">{c.author.avatar}</div>
-                <div className="flex-1 min-w-0">
-                  <div className="bg-slate-50 dark:bg-slate-700 rounded-xl px-3 py-2">
-                    <div className="flex items-center gap-1.5 mb-0.5">
-                      <span className="font-semibold text-slate-900 dark:text-white text-xs">{c.author.name}</span>
-                      <span className={cn('text-xs', LEVEL_COLORS[c.author.level])}>{c.author.level}</span>
+          <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">
+            <div className="space-y-3 mb-3">
+              {comments.map(comment => (
+                <div key={comment.id} className="flex gap-2 text-sm">
+                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-xs shrink-0">👤</div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-slate-900 dark:text-white">Student</span>
+                      <span className="text-xs text-slate-400">{formatTime(comment.created_at)}</span>
                     </div>
-                    <p className="text-sm text-slate-700 dark:text-slate-300">{c.content}</p>
+                    <p className="text-slate-700 dark:text-slate-300 mt-0.5">{comment.content}</p>
                   </div>
-                  <div className="flex items-center gap-3 mt-1 px-1">
-                    <span className="text-xs text-slate-400">{formatTime(c.createdAt)}</span>
-                    <button onClick={() => setReplyTo(replyTo === c.id ? null : c.id)} className="text-xs text-primary-600 dark:text-primary-400 hover:underline">Reply</button>
-                  </div>
-                  {replyTo === c.id && (
-                    <div className="flex gap-2 mt-2">
-                      <input value={replyText} onChange={e => setReplyText(e.target.value)} placeholder="Write a reply..." className="flex-1 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-slate-900 dark:text-white focus:border-primary-500 focus:outline-none" />
-                      <button onClick={() => { if (replyText.trim()) { onAddComment(post.id, `@${c.author.name} ${replyText}`, c.id); setReplyText(''); setReplyTo(null) } }} className="px-3 py-1.5 rounded-lg bg-primary-500 text-white text-xs font-medium"><Send className="w-3 h-3" /></button>
-                    </div>
-                  )}
                 </div>
-              </div>
-            ))}
-            {/* Add comment */}
-            <div className="flex gap-2.5 pt-1">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-sm shrink-0">🧑‍🎓</div>
-              <div className="flex-1 flex gap-2">
-                <input value={commentText} onChange={e => setCommentText(e.target.value)} onKeyDown={e => e.key === 'Enter' && !e.shiftKey && submitComment()} placeholder="Add a comment... (use @name to mention)" className="flex-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-slate-900 dark:text-white focus:border-primary-500 focus:outline-none" />
-                <button onClick={submitComment} disabled={!commentText.trim()} className="p-2 rounded-xl bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-40 transition-colors"><Send className="w-4 h-4" /></button>
-              </div>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <input
+                value={commentText}
+                onChange={e => setCommentText(e.target.value)}
+                placeholder="Write a comment..."
+                className="flex-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white focus:border-primary-500 focus:outline-none"
+              />
+              <button onClick={submitComment} disabled={!commentText.trim()} className="px-4 py-2 rounded-xl bg-primary-500 text-white text-sm font-medium disabled:opacity-50">
+                <Send className="w-4 h-4" />
+              </button>
             </div>
           </div>
         )}
@@ -528,9 +658,4 @@ function PostCard({ post, bookmarked, comments, expanded, onToggleExpand, onReac
     </div>
   )
 }
-
-
-
-
-
 

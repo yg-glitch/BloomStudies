@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import {
   FileCheck, Upload, Sparkles, ChevronDown, Trophy,
   TrendingUp, AlertCircle, CheckCircle, XCircle,
@@ -17,6 +17,8 @@ import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, AreaChart, Area
 } from 'recharts'
+
+export const dynamic = 'force-dynamic'
 
 interface GraderResult {
   estimatedGrade: string
@@ -124,11 +126,7 @@ export default function ExamGraderPage() {
   const [loading, setLoading] = useState(true)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => {
-    loadSubmissions()
-  }, [])
-
-  const loadSubmissions = async () => {
+  const loadSubmissions = useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
@@ -136,20 +134,24 @@ export default function ExamGraderPage() {
       const answers = await getGradedAnswers(user.id)
       setSubmissions(answers.map(a => ({
         id: a.id,
-        subject: a.subject,
-        question: a.question,
+        subject: a.subject || 'General',
+        question: a.question || '',
         studentAnswer: a.student_answer,
         result: a.result as GraderResult,
         timestamp: new Date(a.created_at),
-        educationSystem: a.education_system,
-        level: a.level,
+        educationSystem: a.education_system || 'leaving-cert',
+        level: a.level || 'higher',
       })))
     } catch (error) {
-      console.error('Error loading submissions:', error)
+      // Error loading submissions - handled silently
     } finally {
       setLoading(false)
     }
-  }
+  }, [supabase])
+
+  useEffect(() => {
+    loadSubmissions()
+  }, [loadSubmissions])
 
   const wordCount = studentAnswer.trim().split(/\s+/).filter(Boolean).length
 
@@ -199,7 +201,7 @@ export default function ExamGraderPage() {
       toastXP(15, 'Exam Grader')
       if (data.percentageScore >= 80) toastAchievement('Excellent Answer!', '🏆')
     } catch (error: any) {
-      console.error('Grading error:', error)
+      // Grading error - handled with toast
       toastError('Failed to grade answer', error.message || 'Please try again')
     } finally {
       setIsGrading(false)

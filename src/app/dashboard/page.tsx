@@ -16,6 +16,8 @@ import { getUpcomingExams } from '@/lib/database/exams'
 import { getProgress } from '@/lib/database/progress'
 import type { Profile } from '@/lib/database/profiles'
 
+export const dynamic = 'force-dynamic'
+
 export default function Dashboard() {
   const supabase = createClient()
   const [mounted, setMounted] = useState(false)
@@ -55,7 +57,7 @@ export default function Dashboard() {
         }
       }
     } catch (error) {
-      console.error('Error loading dashboard data:', error)
+      // Error loading dashboard data - handled silently
     } finally {
       setLoading(false)
     }
@@ -350,6 +352,7 @@ export default function Dashboard() {
     </div>
   )
 }
+
 
 
 

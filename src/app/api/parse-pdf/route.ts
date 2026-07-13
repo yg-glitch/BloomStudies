@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
       info: data.info,
     })
   } catch (error: any) {
-    console.error('PDF parse error:', error)
+    // PDF parse error - handled with response
     return NextResponse.json(
       { error: 'Failed to parse PDF: ' + (error.message || 'Unknown error') },
       { status: 500 }

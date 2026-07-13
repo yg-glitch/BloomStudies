@@ -238,9 +238,7 @@ class AIService {
         return response
       } catch (error) {
         lastError = error as Error
-        console.error(`Provider ${providerInstance.type} failed:`, error)
-
-        // Try next provider
+        // Provider failed - try next provider
         providerInstance = this.getNextProvider(providerInstance.type)
       }
     }
@@ -269,7 +267,7 @@ class AIService {
       this.updateRateLimit(providerInstance.type)
       yield* providerInstance.provider.generateStreamResponse(messages, options)
     } catch (error) {
-      console.error(`Streaming failed for provider ${providerInstance.type}:`, error)
+      // Streaming failed - throw error
       throw error
     }
   }

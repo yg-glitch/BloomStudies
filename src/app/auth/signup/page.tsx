@@ -7,6 +7,8 @@ import { Mail, Lock, User, ArrowRight, Eye, EyeOff, AlertCircle, Check } from 'l
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 
+export const dynamic = 'force-dynamic'
+
 function PasswordStrength({ password }: { password: string }) {
   const checks = [
     { label: '8+ characters', pass: password.length >= 8 },
@@ -94,7 +96,7 @@ export default function SignUp() {
           </div>
           <h1 className="font-display text-3xl font-black text-slate-900 dark:text-white mb-3">Check your email</h1>
           <p className="text-slate-500 dark:text-slate-400 mb-8 leading-relaxed">
-            We've sent a confirmation link to <strong className="text-slate-900 dark:text-white">{email}</strong>.
+            We&apos;ve sent a confirmation link to <strong className="text-slate-900 dark:text-white">{email}</strong>.
             Click it to activate your account.
           </p>
           <Link href="/auth/signin" className="btn-primary inline-flex">
@@ -130,8 +132,8 @@ export default function SignUp() {
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-lg shrink-0">🧑‍💻</div>
             <div>
-              <p className="text-white text-sm leading-relaxed italic">"The exam grader told me exactly what the examiner wanted. My English went from H3 to H1 in a month."</p>
-              <p className="text-white/60 text-xs mt-2">Ciarán O'Brien · Leaving Cert</p>
+              <p className="text-white text-sm leading-relaxed italic">&quot;The exam grader told me exactly what the examiner wanted. My English went from H3 to H1 in a month.&quot;</p>
+              <p className="text-white/60 text-xs mt-2">Ciarán O&apos;Brien · Leaving Cert</p>
             </div>
           </div>
         </div>
@@ -230,3 +232,4 @@ export default function SignUp() {
     </div>
   )
 }
+

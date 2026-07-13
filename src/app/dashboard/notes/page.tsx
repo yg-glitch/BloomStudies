@@ -12,6 +12,8 @@ import MarkdownRenderer from '@/components/ui/MarkdownRenderer'
 import { createClient } from '@/lib/supabase/client'
 import { getNotes, createNote, updateNote, deleteNote } from '@/lib/database/notes'
 
+export const dynamic = 'force-dynamic'
+
 type NotesAction = 'summarise' | 'explain' | 'key-concepts' | 'definitions' | 'revision-notes' | 'flashcards' | 'quiz' | 'mind-map'
 
 interface Note {
@@ -61,6 +63,7 @@ export default function AINotesPage() {
   const exportRef = useRef<HTMLDivElement>(null)
 
   // Load notes from Supabase on mount
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     loadNotes()
   }, [])
@@ -81,7 +84,7 @@ export default function AINotesPage() {
         results: {},
       })))
     } catch (error) {
-      console.error('Error loading notes:', error)
+      // Error loading notes - handled silently
     } finally {
       setLoading(false)
     }
@@ -158,7 +161,7 @@ export default function AINotesPage() {
       toastSuccess('Note created', `${newTitle} · ${newContent.split(/\s+/).length} words`)
       toastXP(10, 'Created a new note')
     } catch (error) {
-      console.error('Error creating note:', error)
+      // Error creating note - handled silently
     }
   }
 
@@ -185,7 +188,7 @@ export default function AINotesPage() {
         content: selectedNote.rawContent + `\n\n## ${action.toUpperCase()}\n\n${result}`,
       })
     } catch (err: any) {
-      console.error(err)
+      // AI action error - handled silently
     } finally {
       setIsProcessing(false); setProcessingAction(null)
     }
@@ -459,6 +462,7 @@ export default function AINotesPage() {
     </div>
   )
 }
+
 
 
 

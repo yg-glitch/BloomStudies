@@ -10,7 +10,7 @@ export async function GET(request: Request) {
 
   // Handle OAuth errors
   if (error) {
-    console.error('OAuth error:', error, errorDescription)
+    // OAuth error - handled with redirect
     return NextResponse.redirect(`${origin}/auth/signin?error=${encodeURIComponent(errorDescription || error)}`)
   }
 

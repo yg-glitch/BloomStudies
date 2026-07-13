@@ -100,7 +100,7 @@ Create exactly ${count} flashcards, ${Math.ceil(count * 0.6)} multiple choice qu
 
     return NextResponse.json(parsed)
   } catch (error: any) {
-    console.error('Flashcard generation error:', error)
+    // Flashcard generation error - handled with response
     return NextResponse.json({ error: error.message || 'Failed to generate flashcards' }, { status: 500 })
   }
 }

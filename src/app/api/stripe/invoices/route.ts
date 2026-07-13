@@ -3,7 +3,7 @@ import Stripe from 'stripe'
 import { createClient } from '@/lib/supabase/server'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder', {
-  apiVersion: '2025-05-28.basil',
+  apiVersion: '2026-06-24.dahlia',
 })
 
 export async function GET(req: NextRequest) {
@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ invoices: formatted })
   } catch (error: any) {
-    console.error('Invoices error:', error)
+    // Invoices error - handled with response
     return NextResponse.json({ invoices: [] })
   }
 }

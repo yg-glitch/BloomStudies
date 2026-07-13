@@ -13,6 +13,8 @@ import UpgradePrompt from '@/components/ui/UpgradePrompt'
 import { useToast } from '@/components/ui/Toast'
 import { createClient } from '@/lib/supabase/client'
 
+export const dynamic = 'force-dynamic'
+
 type Tab = 'profile' | 'billing' | 'notifications' | 'privacy' | 'study' | 'appearance' | 'danger'
 
 interface BillingInvoice {
@@ -371,3 +373,4 @@ export default function SettingsPage() {
     </div>
   )
 }
+

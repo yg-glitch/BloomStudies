@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Brain, FileCheck, Layers, BookOpen,
   Headphones, FileText, Calendar, TrendingUp, Settings,
   ChevronLeft, ChevronRight, Moon, Sun, Users, GraduationCap,
-  Sparkles, Crown, LogOut
+  Sparkles, Crown, LogOut, Target
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useState, useEffect } from 'react'
@@ -32,6 +32,7 @@ const NAV_GROUPS = [
     items: [
       { name: 'Study Planner', href: '/dashboard/planner', icon: Calendar },
       { name: 'Past Papers', href: '/dashboard/papers', icon: FileText },
+      { name: 'Topic Questions', href: '/dashboard/questions', icon: Target, badge: 'New' },
       { name: 'Progress', href: '/dashboard/progress', icon: TrendingUp },
     ],
   },
@@ -284,3 +285,4 @@ export default function Sidebar() {
     </>
   )
 }
+

@@ -13,7 +13,9 @@ import { useSubscription } from '@/components/SubscriptionProvider'
 import UpgradePrompt from '@/components/ui/UpgradePrompt'
 import { useToast } from '@/components/ui/Toast'
 import { createClient } from '@/lib/supabase/client'
-import { getConversations, createConversation, addMessage, updateConversationTitle, deleteConversation, getMessages } from '@/lib/database/conversations'
+import { getConversations, createConversation, addMessage, updateConversationTitle, deleteConversation, getMessages, Conversation } from '@/lib/database/conversations'
+
+export const dynamic = 'force-dynamic'
 
 interface Message {
   id: string
@@ -31,13 +33,7 @@ interface Attachment {
   preview?: string
 }
 
-interface Conversation {
-  id: string
-  title: string
-  subject?: string
-  created_at: string
-  updated_at: string
-}
+
 
 const SUBJECTS = [
   'Mathematics', 'English', 'Irish', 'Physics', 'Chemistry',
@@ -121,7 +117,7 @@ Here's what I can do for you:
       const convs = await getConversations(user.id)
       setConversations(convs)
     } catch (error) {
-      console.error('Error loading conversations:', error)
+      // Error loading conversations - handled silently
     }
   }
 
@@ -131,8 +127,10 @@ Here's what I can do for you:
       if (!user) return
 
       const newConv = await createConversation(user.id, 'New Conversation', selectedSubject)
-      setConversations(prev => [newConv, ...prev])
-      setCurrentConversationId(newConv.id)
+      if (newConv) {
+        setConversations(prev => [newConv, ...prev])
+        setCurrentConversationId(newConv.id)
+      }
       setMessages([
         {
           id: '1',
@@ -146,7 +144,7 @@ I'm your personal AI teacher, here to help you ace your **Junior Cycle** and **L
         }
       ])
     } catch (error) {
-      console.error('Error creating conversation:', error)
+      // Error creating conversation - handled silently
     }
   }
 
@@ -184,7 +182,7 @@ I'm your personal AI teacher, here to help you ace your **Junior Cycle** and **L
         }
       ])
     } catch (error) {
-      console.error('Error loading conversation:', error)
+      // Error loading conversation - handled silently
     }
   }
 
@@ -197,7 +195,7 @@ I'm your personal AI teacher, here to help you ace your **Junior Cycle** and **L
         createNewConversation()
       }
     } catch (error) {
-      console.error('Error deleting conversation:', error)
+      // Error deleting conversation - handled silently
     }
   }
 
@@ -425,7 +423,7 @@ I'm your personal AI teacher, here to help you ace your **Junior Cycle** and **L
       else toastXP(5, 'AI Tutor session')
     } catch (error: any) {
       if (error.name === 'AbortError') return
-      console.error('Tutor error:', error)
+      // Tutor error - handled with toast
       toastError('AI response failed', 'Please try again')
       setMessages(prev =>
         prev.map(m =>
@@ -500,7 +498,7 @@ I'm your personal AI teacher, here to help you ace your **Junior Cycle** and **L
             {/* Conversation List */}
             <div className="flex-1 overflow-y-auto p-2 space-y-1">
               {conversations
-                .filter(c => c.title.toLowerCase().includes(searchQuery.toLowerCase()))
+                .filter(c => c.title?.toLowerCase().includes(searchQuery.toLowerCase()))
                 .map((conv) => (
                   <div
                     key={conv.id}
@@ -854,6 +852,7 @@ I'm your personal AI teacher, here to help you ace your **Junior Cycle** and **L
     </div>
   )
 }
+
 
 
 

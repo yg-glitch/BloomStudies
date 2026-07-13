@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ url: session.url })
   } catch (error: any) {
-    console.error('Stripe portal error:', error)
+    // Stripe portal error - handled with response
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }

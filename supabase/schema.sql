@@ -183,16 +183,88 @@ CREATE TABLE IF NOT EXISTS public.past_papers (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- Graded Answers
+-- Community Posts
+CREATE TABLE IF NOT EXISTS public.community_posts (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+  community TEXT NOT NULL,
+  type TEXT CHECK (type IN ('text', 'poll', 'link', 'image')) DEFAULT 'text',
+  title TEXT NOT NULL,
+  content TEXT,
+  link_url TEXT,
+  image_url TEXT,
+  poll JSONB,
+  tags TEXT[],
+  reactions JSONB DEFAULT '{"like": 0, "helpful": 0, "fire": 0, "mindblown": 0}'::jsonb,
+  user_reaction TEXT,
+  comments_count INTEGER DEFAULT 0,
+  bookmarked BOOLEAN DEFAULT FALSE,
+  pinned BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Community Comments
+CREATE TABLE IF NOT EXISTS public.community_comments (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  post_id UUID REFERENCES public.community_posts(id) ON DELETE CASCADE NOT NULL,
+  user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+  parent_id UUID REFERENCES public.community_comments(id) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  reactions JSONB DEFAULT '{"like": 0, "helpful": 0, "fire": 0, "mindblown": 0}'::jsonb,
+  pinned BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Community Reactions (separate table for tracking user reactions)
+CREATE TABLE IF NOT EXISTS public.community_reactions (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+  post_id UUID REFERENCES public.community_posts(id) ON DELETE CASCADE,
+  comment_id UUID REFERENCES public.community_comments(id) ON DELETE CASCADE,
+  reaction_type TEXT CHECK (reaction_type IN ('like', 'helpful', 'fire', 'mindblown')) NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  UNIQUE(user_id, post_id),
+  UNIQUE(user_id, comment_id)
+);
+
+-- Community Bookmarks
+CREATE TABLE IF NOT EXISTS public.community_bookmarks (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+  post_id UUID REFERENCES public.community_posts(id) ON DELETE CASCADE NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  UNIQUE(user_id, post_id)
+);
+
+-- Community Joined Communities
+CREATE TABLE IF NOT EXISTS public.community_joined (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+  community TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  UNIQUE(user_id, community)
+);
+
+-- Community Reported Posts
+CREATE TABLE IF NOT EXISTS public.community_reports (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+  post_id UUID REFERENCES public.community_posts(id) ON DELETE CASCADE NOT NULL,
+  reason TEXT,
+  status TEXT CHECK (status IN ('pending', 'reviewed', 'dismissed')) DEFAULT 'pending',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Graded Answers (updated to match new structure)
 CREATE TABLE IF NOT EXISTS public.graded_answers (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
   subject TEXT,
   question TEXT,
-  answer TEXT NOT NULL,
-  grade TEXT,
-  feedback TEXT,
-  marking_scheme_points TEXT[],
+  student_answer TEXT NOT NULL,
+  result JSONB,
+  education_system TEXT,
+  level TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -243,6 +315,16 @@ CREATE INDEX IF NOT EXISTS idx_audio_lessons_user_id ON public.audio_lessons(use
 CREATE INDEX IF NOT EXISTS idx_ai_memory_user_id ON public.ai_memory(user_id);
 CREATE INDEX IF NOT EXISTS idx_ai_memory_feature ON public.ai_memory(feature);
 CREATE INDEX IF NOT EXISTS idx_ai_memory_context_key ON public.ai_memory(context_key);
+CREATE INDEX IF NOT EXISTS idx_community_posts_user_id ON public.community_posts(user_id);
+CREATE INDEX IF NOT EXISTS idx_community_posts_community ON public.community_posts(community);
+CREATE INDEX IF NOT EXISTS idx_community_posts_created_at ON public.community_posts(created_at);
+CREATE INDEX IF NOT EXISTS idx_community_comments_post_id ON public.community_comments(post_id);
+CREATE INDEX IF NOT EXISTS idx_community_comments_user_id ON public.community_comments(user_id);
+CREATE INDEX IF NOT EXISTS idx_community_reactions_user_id ON public.community_reactions(user_id);
+CREATE INDEX IF NOT EXISTS idx_community_reactions_post_id ON public.community_reactions(post_id);
+CREATE INDEX IF NOT EXISTS idx_community_bookmarks_user_id ON public.community_bookmarks(user_id);
+CREATE INDEX IF NOT EXISTS idx_community_joined_user_id ON public.community_joined(user_id);
+CREATE INDEX IF NOT EXISTS idx_community_reports_user_id ON public.community_reports(user_id);
 
 -- Enable Row Level Security
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
@@ -261,6 +343,12 @@ ALTER TABLE public.subscriptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.learning_resources ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.audio_lessons ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_memory ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.community_posts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.community_comments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.community_reactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.community_bookmarks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.community_joined ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.community_reports ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for Profiles
 CREATE POLICY "Users can view own profile" ON public.profiles FOR SELECT USING (auth.uid() = id);
@@ -350,6 +438,37 @@ CREATE POLICY "Users can view own ai memory" ON public.ai_memory FOR SELECT USIN
 CREATE POLICY "Users can create own ai memory" ON public.ai_memory FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can update own ai memory" ON public.ai_memory FOR UPDATE USING (auth.uid() = user_id);
 CREATE POLICY "Users can delete own ai memory" ON public.ai_memory FOR DELETE USING (auth.uid() = user_id);
+
+-- RLS Policies for Community Posts
+CREATE POLICY "Users can view community posts" ON public.community_posts FOR SELECT USING (true);
+CREATE POLICY "Users can create own community posts" ON public.community_posts FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own community posts" ON public.community_posts FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete own community posts" ON public.community_posts FOR DELETE USING (auth.uid() = user_id);
+
+-- RLS Policies for Community Comments
+CREATE POLICY "Users can view community comments" ON public.community_comments FOR SELECT USING (true);
+CREATE POLICY "Users can create own community comments" ON public.community_comments FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own community comments" ON public.community_comments FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete own community comments" ON public.community_comments FOR DELETE USING (auth.uid() = user_id);
+
+-- RLS Policies for Community Reactions
+CREATE POLICY "Users can view community reactions" ON public.community_reactions FOR SELECT USING (true);
+CREATE POLICY "Users can create own community reactions" ON public.community_reactions FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can delete own community reactions" ON public.community_reactions FOR DELETE USING (auth.uid() = user_id);
+
+-- RLS Policies for Community Bookmarks
+CREATE POLICY "Users can view own community bookmarks" ON public.community_bookmarks FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can create own community bookmarks" ON public.community_bookmarks FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can delete own community bookmarks" ON public.community_bookmarks FOR DELETE USING (auth.uid() = user_id);
+
+-- RLS Policies for Community Joined
+CREATE POLICY "Users can view own community joined" ON public.community_joined FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can create own community joined" ON public.community_joined FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can delete own community joined" ON public.community_joined FOR DELETE USING (auth.uid() = user_id);
+
+-- RLS Policies for Community Reports
+CREATE POLICY "Users can view own community reports" ON public.community_reports FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can create own community reports" ON public.community_reports FOR INSERT WITH CHECK (auth.uid() = user_id);
 
 -- Function to handle new user signup
 CREATE OR REPLACE FUNCTION public.handle_new_user()

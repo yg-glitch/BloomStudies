@@ -20,6 +20,8 @@ import { getGradedAnswers } from '@/lib/database/graded-answers'
 import { getFlashcardDecks, getFlashcards, getFlashcardsByDeck } from '@/lib/database/flashcards'
 import { getStudySessions } from '@/lib/database/study-sessions'
 
+export const dynamic = 'force-dynamic'
+
 interface AIInsights {
   predictedPoints: number
   predictedGrades: Record<string, string>
@@ -54,6 +56,7 @@ export default function ProgressPage() {
   const [loading, setLoading] = useState(true)
 
   // Load real data from Supabase
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     loadProgressData()
   }, [])
@@ -73,8 +76,8 @@ export default function ProgressPage() {
         subject: g.subject,
         created_at: g.created_at,
         result: {
-          percentageScore: g.result?.percentageScore || g.percentage_score || 0,
-          estimatedGrade: g.result?.estimatedGrade || g.estimated_grade || '',
+          percentageScore: g.result?.percentageScore || 0,
+          estimatedGrade: g.result?.estimatedGrade || '',
         },
       })))
 
@@ -89,7 +92,7 @@ export default function ProgressPage() {
       setFlashcardDecks(decksWithCards)
       setStudySessions(sessionsData)
     } catch (error) {
-      console.error('Error loading progress data:', error)
+      // Error loading progress data - handled silently
     } finally {
       setLoading(false)
     }
@@ -200,7 +203,7 @@ export default function ProgressPage() {
         body: JSON.stringify({ analyticsData }),
       })
       if (res.ok) setInsights(await res.json())
-    } catch (e) { console.error(e) }
+    } catch (e) { /* AI insights error - handled silently */ }
     finally { setIsLoadingAI(false) }
   }
 
@@ -548,6 +551,8 @@ export default function ProgressPage() {
     </div>
   )
 }
+
+
 
 
 

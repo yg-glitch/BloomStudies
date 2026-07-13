@@ -13,6 +13,8 @@ import { useToast } from '@/components/ui/Toast'
 import { createClient } from '@/lib/supabase/client'
 import { getAudioLessons, createAudioLesson, updateAudioLesson, deleteAudioLesson, updateAudioLessonProgress, addAudioLessonBookmark, type AudioLesson } from '@/lib/database/audio-lessons'
 
+export const dynamic = 'force-dynamic'
+
 interface Chapter { title: string; startIndex: number; summary: string }
 
 const VOICES = [
@@ -67,11 +69,7 @@ export default function AudioLearningPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Load lessons from Supabase
-  useEffect(() => {
-    loadLessons()
-  }, [])
-
-  const loadLessons = async () => {
+  const loadLessons = useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
@@ -79,11 +77,15 @@ export default function AudioLearningPage() {
       const lessonsData = await getAudioLessons(user.id)
       setLessons(lessonsData)
     } catch (error) {
-      console.error('Error loading lessons:', error)
+      // Error loading lessons - handled silently
     } finally {
       setLoading(false)
     }
-  }
+  }, [supabase])
+
+  useEffect(() => {
+    loadLessons()
+  }, [loadLessons])
 
   const totalChars = active?.script.length || 1
   const charProgress = Math.min(currentTime / (active?.duration || 1), 1)

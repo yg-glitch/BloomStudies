@@ -11,13 +11,17 @@ export type PastPaper = {
   duration: number | null
   question_count: number | null
   topics: string[] | null
+  language: 'English' | 'Irish' | 'Both'
+  audio_url: string | null
+  examiner_report_url: string | null
+  education_system: 'junior-cycle' | 'leaving-cert'
   created_at: string
 }
 
 export async function getPastPapers(filters?: {
   subject?: string
   year?: number
-  level?: 'Higher' | 'Ordinary'
+  level?: 'Higher' | 'Ordinary' | 'All'
 }): Promise<PastPaper[]> {
   const supabase = await createClient()
   let query = supabase
@@ -33,7 +37,7 @@ export async function getPastPapers(filters?: {
     query = query.eq('year', filters.year)
   }
   if (filters?.level && filters.level !== 'All') {
-    query = query.eq('level', filters.level)
+    query = query.eq('level', filters.level as 'Higher' | 'Ordinary')
   }
 
   const { data, error } = await query

@@ -85,7 +85,6 @@ export async function POST(req: NextRequest) {
       parsed = JSON.parse(cleaned)
     } catch {
       // If parsing fails, return a structured error with the raw response
-      console.error('Failed to parse grader response:', responseText)
       return NextResponse.json({ error: 'Failed to parse AI response', raw: responseText }, { status: 500 })
     }
 
@@ -121,7 +120,7 @@ export async function POST(req: NextRequest) {
 
     // Save to DB (non-blocking — after response sent)
   } catch (error: any) {
-    console.error('Grader API error:', error)
+    // Grader API error - handled with response
     return NextResponse.json(
       { error: error.message || 'Failed to grade answer' },
       { status: 500 }

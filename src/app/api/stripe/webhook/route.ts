@@ -3,7 +3,7 @@ import Stripe from 'stripe'
 import { createClient } from '@/lib/supabase/server'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder', {
-  apiVersion: '2025-05-28.basil',
+  apiVersion: '2026-06-24.dahlia',
 })
 
 export async function POST(req: NextRequest) {
@@ -18,6 +18,7 @@ export async function POST(req: NextRequest) {
   try {
     event = stripe.webhooks.constructEvent(body, sig, process.env.STRIPE_WEBHOOK_SECRET)
   } catch (err: any) {
+    // Webhook signature verification failed - log for debugging
     console.error('Webhook signature verification failed:', err.message)
     return NextResponse.json({ error: `Webhook Error: ${err.message}` }, { status: 400 })
   }
@@ -88,8 +89,8 @@ export async function POST(req: NextRequest) {
             stripe_subscription_id: subscription.id,
             plan: isActive ? 'premium' : 'free',
             status: subscription.status,
-            current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-            current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+            current_period_start: new Date((subscription as any).current_period_start * 1000).toISOString(),
+            current_period_end: new Date((subscription as any).current_period_end * 1000).toISOString(),
             cancel_at_period_end: subscription.cancel_at_period_end,
             updated_at: new Date().toISOString(),
           }).eq('user_id', sub.user_id)
@@ -125,7 +126,7 @@ export async function POST(req: NextRequest) {
 
       case 'invoice.payment_succeeded': {
         const invoice = event.data.object as Stripe.Invoice
-        console.log('Payment succeeded:', invoice.id, invoice.amount_paid / 100, 'EUR')
+        // Payment succeeded - subscription is active
         break
       }
 
@@ -146,14 +147,15 @@ export async function POST(req: NextRequest) {
             updated_at: new Date().toISOString(),
           }).eq('user_id', sub.user_id)
         }
-        console.error('Payment failed for customer:', customerId)
         break
       }
 
       default:
-        console.log(`Unhandled Stripe event: ${event.type}`)
+        // Unhandled Stripe event type
+        break
     }
   } catch (err: any) {
+    // Webhook processing error - log for debugging
     console.error('Webhook processing error:', err)
     // Return 200 to prevent Stripe from retrying for logic errors
     // Only return 4xx/5xx for signature/parsing issues

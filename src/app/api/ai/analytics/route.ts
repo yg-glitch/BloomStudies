@@ -37,7 +37,7 @@ Respond with ONLY valid JSON:
     const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
     return NextResponse.json(JSON.parse(cleaned))
   } catch (error: any) {
-    console.error('Analytics AI error:', error)
+    // Analytics AI error - handled with response
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
