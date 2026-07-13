@@ -66,6 +66,7 @@ export default function AINotesPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     loadNotes()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const loadNotes = async () => {

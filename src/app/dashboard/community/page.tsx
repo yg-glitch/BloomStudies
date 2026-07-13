@@ -84,7 +84,7 @@ export default function CommunityPage() {
   const loadPosts = useCallback(async () => {
     try {
       const { data: { user: authUser } } = await supabase.auth.getUser()
-      const loadedPosts = await getCommunityPosts(authUser?.id, activeCommunity || undefined)
+      const loadedPosts = await getCommunityPosts({ userId: authUser?.id, community: activeCommunity || undefined })
       setPosts(loadedPosts)
       
       // Load comments for all posts
@@ -119,7 +119,7 @@ export default function CommunityPage() {
     if (activeCommunity && p.community !== activeCommunity) return false
     if (searchQuery && !p.title.toLowerCase().includes(searchQuery.toLowerCase()) && !(p.content || '').toLowerCase().includes(searchQuery.toLowerCase())) return false
     return true
-  }).sort((a, b) => {
+  }).sort((a: CommunityPost, b: CommunityPost) => {
     if (sort === 'New') return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     if (sort === 'Top') return totalScore(b) - totalScore(a)
     const ageA = (Date.now() - new Date(a.created_at).getTime()) / 3600000
@@ -127,7 +127,9 @@ export default function CommunityPage() {
     return (totalScore(b) / (ageB + 2)) - (totalScore(a) / (ageA + 2))
   })
 
-  function totalScore(p: CommunityPost) { return Object.values(p.reactions).reduce((s, v) => s + v, 0) }
+  function totalScore(p: CommunityPost) {
+    return (p.reaction_like || 0) + (p.reaction_helpful || 0) + (p.reaction_fire || 0) + (p.reaction_mindblown || 0)
+  }
 
   const handleReact = async (postId: string, reaction: Reaction) => {
     const { data: { user: authUser } } = await supabase.auth.getUser()
@@ -137,17 +139,23 @@ export default function CommunityPage() {
     const newReaction = currentReaction === reaction ? null : reaction
     
     await updateCommunityPostReaction(postId, authUser.id, newReaction)
-    
+
     setPosts(prev => prev.map(p => {
       if (p.id !== postId) return p
-      const reactions = { ...p.reactions }
+      const updated: CommunityPost = { ...p, user_reaction: newReaction }
       if (currentReaction && currentReaction !== reaction) {
-        reactions[currentReaction as keyof typeof reactions] = Math.max(0, reactions[currentReaction as keyof typeof reactions] - 1)
+        if (currentReaction === 'like') updated.reaction_like = Math.max(0, (updated.reaction_like || 0) - 1)
+        if (currentReaction === 'helpful') updated.reaction_helpful = Math.max(0, (updated.reaction_helpful || 0) - 1)
+        if (currentReaction === 'fire') updated.reaction_fire = Math.max(0, (updated.reaction_fire || 0) - 1)
+        if (currentReaction === 'mindblown') updated.reaction_mindblown = Math.max(0, (updated.reaction_mindblown || 0) - 1)
       }
       if (reaction && reaction !== currentReaction) {
-        reactions[reaction as keyof typeof reactions] = (reactions[reaction as keyof typeof reactions] || 0) + 1
+        if (reaction === 'like') updated.reaction_like = (updated.reaction_like || 0) + 1
+        if (reaction === 'helpful') updated.reaction_helpful = (updated.reaction_helpful || 0) + 1
+        if (reaction === 'fire') updated.reaction_fire = (updated.reaction_fire || 0) + 1
+        if (reaction === 'mindblown') updated.reaction_mindblown = (updated.reaction_mindblown || 0) + 1
       }
-      return { ...p, user_reaction: newReaction, reactions }
+      return updated
     }))
   }
 
@@ -186,13 +194,16 @@ export default function CommunityPage() {
     try {
       const newPost = await createCommunityPost(
         authUser.id,
-        composeCommunity,
-        composeTab,
-        composeTitle,
-        composeContent,
-        composeLinkUrl,
-        composeImageUrl,
-        composeTab === 'poll' ? { question: composeTitle, options: pollOptions.filter((o: string) => o.trim()).map((o: string) => ({ text: o, votes: 0 })), totalVotes: 0 } : undefined
+        {
+          community: composeCommunity,
+          type: composeTab,
+          title: composeTitle,
+          content: composeContent,
+          image_url: composeImageUrl,
+          link_url: composeLinkUrl,
+          poll_data: composeTab === 'poll' ? { question: composeTitle, options: pollOptions.filter((o: string) => o.trim()).map((o: string) => ({ text: o, votes: 0 })), totalVotes: 0 } : undefined,
+          tags: []
+        }
       )
       
       if (newPost) {
@@ -285,9 +296,9 @@ export default function CommunityPage() {
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-50 dark:bg-slate-950">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-slate-500 dark:text-slate-400">Loading community...</p>
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-primary-500 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-slate-500 font-medium animate-pulse">Loading community...</p>
         </div>
       </div>
     )
@@ -581,25 +592,29 @@ function PostCard({ post, bookmarked, comments, expanded, onToggleExpand, onReac
         {/* Poll */}
         {post.poll && (
           <div className="mt-3 space-y-2">
-            {post.poll.options?.map((opt: any, i: number) => (
-              <div key={i} className="relative">
-                <button
-                  onClick={() => onVotePoll(post.id, i)}
-                  disabled={post.poll.userVoted !== undefined}
-                  className={cn('w-full text-left px-4 py-2.5 rounded-xl border-2 transition-all text-sm', post.poll.userVoted === i ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/30' : 'border-slate-200 dark:border-slate-700 hover:border-primary-300 disabled:opacity-50')}
-                >
-                  <div className="flex justify-between">
-                    <span>{opt.text}</span>
-                    <span className="text-slate-500">{post.poll.totalVotes > 0 ? Math.round((opt.votes / post.poll.totalVotes) * 100) : 0}%</span>
-                  </div>
-                  {post.poll.totalVotes > 0 && (
-                    <div className="absolute inset-0 pointer-events-none">
-                      <div className="h-full bg-primary-100 dark:bg-primary-950/20 rounded-lg" style={{ width: `${(opt.votes / post.poll.totalVotes) * 100}%` }} />
+            {post.poll?.options?.map((opt: any, i: number) => {
+              const totalVotes = post.poll?.totalVotes || 0
+              const percentage = totalVotes > 0 ? Math.round((opt.votes / totalVotes) * 100) : 0
+              return (
+                <div key={i} className="relative">
+                  <button
+                    onClick={() => onVotePoll(post.id, i)}
+                    disabled={post.poll?.userVoted !== undefined}
+                    className={cn('w-full text-left px-4 py-2.5 rounded-xl border-2 transition-all text-sm', post.poll?.userVoted === i ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/30' : 'border-slate-200 dark:border-slate-700 hover:border-primary-300 disabled:opacity-50')}
+                  >
+                    <div className="flex justify-between">
+                      <span>{opt.text}</span>
+                      <span className="text-slate-500">{percentage}%</span>
                     </div>
-                  )}
-                </button>
-              </div>
-            ))}
+                    {totalVotes > 0 && (
+                      <div className="absolute inset-0 pointer-events-none">
+                        <div className="h-full bg-primary-100 dark:bg-primary-950/20 rounded-lg" style={{ width: `${percentage}%` }} />
+                      </div>
+                    )}
+                  </button>
+                </div>
+              )
+            })}
           </div>
         )}
 
@@ -612,7 +627,7 @@ function PostCard({ post, bookmarked, comments, expanded, onToggleExpand, onReac
               className={cn('flex items-center gap-1 px-2 py-1 rounded-lg text-xs transition-all', post.user_reaction === key ? 'bg-primary-100 dark:bg-primary-950/30 text-primary-600 dark:text-primary-400' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700')}
             >
               <span>{info.emoji}</span>
-              <span>{post.reactions[key as keyof typeof post.reactions]}</span>
+              <span>{post.reactions?.[key as keyof typeof post.reactions] || 0}</span>
             </button>
           ))}
           <button onClick={() => onBookmark(post.id)} className={cn('flex items-center gap-1 px-2 py-1 rounded-lg text-xs transition-all ml-auto', bookmarked ? 'text-primary-600 dark:text-primary-400' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700')}>

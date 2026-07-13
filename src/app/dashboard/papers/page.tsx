@@ -46,6 +46,7 @@ export default function PastPapersPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     loadPapers()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subject, year, level])
 
   const loadPapers = async () => {

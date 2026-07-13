@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
             status: subscription.status,
             current_period_start: new Date((subscription as any).current_period_start * 1000).toISOString(),
             current_period_end: new Date((subscription as any).current_period_end * 1000).toISOString(),
-            cancel_at_period_end: subscription.cancel_at_period_end,
+            cancel_at_period_end: (subscription as any).cancel_at_period_end,
             updated_at: new Date().toISOString(),
           }).eq('user_id', sub.user_id)
 

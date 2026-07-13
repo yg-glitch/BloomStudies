@@ -1,4 +1,4 @@
-import { createUniversalClient as createClient } from '@/lib/supabase/universal'
+import { createClient } from '@/lib/supabase/client'
 
 export type Note = {
   id: string
@@ -12,7 +12,7 @@ export type Note = {
 }
 
 export async function getNotes(userId: string, subject?: string): Promise<Note[]> {
-  const supabase = await createClient()
+  const supabase = createClient()
   let query = supabase
     .from('notes')
     .select('*')
@@ -27,7 +27,7 @@ export async function getNotes(userId: string, subject?: string): Promise<Note[]
 }
 
 export async function getNote(noteId: string): Promise<Note | null> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('notes')
     .select('*')
@@ -39,7 +39,7 @@ export async function getNote(noteId: string): Promise<Note | null> {
 }
 
 export async function createNote(userId: string, note: Omit<Note, 'id' | 'user_id' | 'created_at' | 'updated_at'>): Promise<Note | null> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('notes')
     .insert({ user_id: userId, ...note })
@@ -51,7 +51,7 @@ export async function createNote(userId: string, note: Omit<Note, 'id' | 'user_i
 }
 
 export async function updateNote(noteId: string, updates: Partial<Note>): Promise<Note | null> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('notes')
     .update(updates)
@@ -64,7 +64,7 @@ export async function updateNote(noteId: string, updates: Partial<Note>): Promis
 }
 
 export async function deleteNote(noteId: string): Promise<boolean> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { error } = await supabase
     .from('notes')
     .delete()
@@ -74,7 +74,7 @@ export async function deleteNote(noteId: string): Promise<boolean> {
 }
 
 export async function searchNotes(userId: string, query: string): Promise<Note[]> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('notes')
     .select('*')

@@ -1,4 +1,4 @@
-import { createUniversalClient as createClient } from '@/lib/supabase/universal'
+import { createClient } from '@/lib/supabase/client'
 
 export type AudioLesson = {
   id: string
@@ -15,7 +15,7 @@ export type AudioLesson = {
 }
 
 export async function getAudioLessons(userId: string): Promise<AudioLesson[]> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('audio_lessons')
     .select('*')
@@ -27,7 +27,7 @@ export async function getAudioLessons(userId: string): Promise<AudioLesson[]> {
 }
 
 export async function getAudioLesson(id: string): Promise<AudioLesson | null> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('audio_lessons')
     .select('*')
@@ -39,7 +39,7 @@ export async function getAudioLesson(id: string): Promise<AudioLesson | null> {
 }
 
 export async function createAudioLesson(userId: string, lesson: Omit<AudioLesson, 'id' | 'user_id' | 'created_at'>): Promise<AudioLesson | null> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('audio_lessons')
     .insert({ user_id: userId, ...lesson })
@@ -51,7 +51,7 @@ export async function createAudioLesson(userId: string, lesson: Omit<AudioLesson
 }
 
 export async function updateAudioLesson(id: string, updates: Partial<AudioLesson>): Promise<AudioLesson | null> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('audio_lessons')
     .update(updates)
@@ -64,7 +64,7 @@ export async function updateAudioLesson(id: string, updates: Partial<AudioLesson
 }
 
 export async function deleteAudioLesson(id: string): Promise<boolean> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { error } = await supabase
     .from('audio_lessons')
     .delete()
@@ -74,7 +74,7 @@ export async function deleteAudioLesson(id: string): Promise<boolean> {
 }
 
 export async function updateAudioLessonProgress(id: string, progress: number): Promise<void> {
-  const supabase = await createClient()
+  const supabase = createClient()
   await supabase
     .from('audio_lessons')
     .update({ progress })
@@ -82,7 +82,7 @@ export async function updateAudioLessonProgress(id: string, progress: number): P
 }
 
 export async function addAudioLessonBookmark(id: string, bookmarkPosition: number): Promise<void> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const lesson = await getAudioLesson(id)
   if (!lesson) return
 

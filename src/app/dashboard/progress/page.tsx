@@ -59,6 +59,7 @@ export default function ProgressPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     loadProgressData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const loadProgressData = async () => {
@@ -76,8 +77,8 @@ export default function ProgressPage() {
         subject: g.subject,
         created_at: g.created_at,
         result: {
-          percentageScore: g.result?.percentageScore || 0,
-          estimatedGrade: g.result?.estimatedGrade || '',
+          percentageScore: g.result?.percentageScore || (g as any).percentage_score || 0,
+          estimatedGrade: g.result?.estimatedGrade || (g as any).estimated_grade || '',
         },
       })))
 
@@ -207,7 +208,10 @@ export default function ProgressPage() {
     finally { setIsLoadingAI(false) }
   }
 
-  useEffect(() => { fetchAIInsights() }, [period])
+  useEffect(() => {
+    fetchAIInsights()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [period])
 
   const statCards = [
     { label: 'Study Hours', value: `${studyHoursTotal}h`, icon: Clock, color: 'from-violet-500 to-purple-600', sub: 'last 30 days' },

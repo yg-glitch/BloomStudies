@@ -1,4 +1,4 @@
-import { createUniversalClient as createClient } from '@/lib/supabase/universal'
+import { createClient } from '@/lib/supabase/client'
 
 export type Conversation = {
   id: string
@@ -18,7 +18,7 @@ export type Message = {
 }
 
 export async function getConversations(userId: string): Promise<Conversation[]> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('conversations')
     .select('*')
@@ -30,7 +30,7 @@ export async function getConversations(userId: string): Promise<Conversation[]> 
 }
 
 export async function getConversation(conversationId: string): Promise<Conversation | null> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('conversations')
     .select('*')
@@ -42,7 +42,7 @@ export async function getConversation(conversationId: string): Promise<Conversat
 }
 
 export async function getMessages(conversationId: string): Promise<Message[]> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('messages')
     .select('*')
@@ -54,7 +54,7 @@ export async function getMessages(conversationId: string): Promise<Message[]> {
 }
 
 export async function createConversation(userId: string, title?: string, subject?: string): Promise<Conversation | null> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('conversations')
     .insert({ user_id: userId, title, subject })
@@ -66,7 +66,7 @@ export async function createConversation(userId: string, title?: string, subject
 }
 
 export async function addMessage(conversationId: string, userId: string, role: 'user' | 'assistant', content: string): Promise<Message | null> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('messages')
     .insert({ conversation_id: conversationId, user_id: userId, role, content })
@@ -85,7 +85,7 @@ export async function addMessage(conversationId: string, userId: string, role: '
 }
 
 export async function deleteConversation(conversationId: string): Promise<boolean> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { error } = await supabase
     .from('conversations')
     .delete()
@@ -95,7 +95,7 @@ export async function deleteConversation(conversationId: string): Promise<boolea
 }
 
 export async function updateConversationTitle(conversationId: string, title: string): Promise<boolean> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { error } = await supabase
     .from('conversations')
     .update({ title })

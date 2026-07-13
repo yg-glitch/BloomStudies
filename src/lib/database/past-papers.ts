@@ -1,4 +1,4 @@
-import { createUniversalClient as createClient } from '@/lib/supabase/universal'
+import { createClient } from '@/lib/supabase/client'
 
 export type PastPaper = {
   id: string
@@ -23,7 +23,7 @@ export async function getPastPapers(filters?: {
   year?: number
   level?: 'Higher' | 'Ordinary' | 'All'
 }): Promise<PastPaper[]> {
-  const supabase = await createClient()
+  const supabase = createClient()
   let query = supabase
     .from('past_papers')
     .select('*')
@@ -47,7 +47,7 @@ export async function getPastPapers(filters?: {
 }
 
 export async function getPastPaper(id: string): Promise<PastPaper | null> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('past_papers')
     .select('*')
@@ -59,7 +59,7 @@ export async function getPastPaper(id: string): Promise<PastPaper | null> {
 }
 
 export async function createPastPaper(paper: Omit<PastPaper, 'id' | 'created_at'>): Promise<PastPaper | null> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('past_papers')
     .insert(paper)
@@ -71,7 +71,7 @@ export async function createPastPaper(paper: Omit<PastPaper, 'id' | 'created_at'
 }
 
 export async function updatePastPaper(id: string, updates: Partial<PastPaper>): Promise<PastPaper | null> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('past_papers')
     .update(updates)
@@ -84,7 +84,7 @@ export async function updatePastPaper(id: string, updates: Partial<PastPaper>): 
 }
 
 export async function deletePastPaper(id: string): Promise<boolean> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { error } = await supabase
     .from('past_papers')
     .delete()
@@ -94,24 +94,24 @@ export async function deletePastPaper(id: string): Promise<boolean> {
 }
 
 export async function getPastPaperYears(): Promise<number[]> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('past_papers')
     .select('year')
 
   if (error) return []
-  const years = [...new Set(data?.map(p => p.year) || [])]
+  const years = [...new Set(data?.map((p: any) => p.year) || [])] as number[]
   return years.sort((a, b) => b - a)
 }
 
 export async function getPastPaperSubjects(): Promise<string[]> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('past_papers')
     .select('subject')
 
   if (error) return []
-  const subjects = [...new Set(data?.map(p => p.subject) || [])]
+  const subjects = [...new Set(data?.map((p: any) => p.subject) || [])] as string[]
   return subjects.sort()
 }
 

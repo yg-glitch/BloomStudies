@@ -107,6 +107,7 @@ Here's what I can do for you:
 
   useEffect(() => {
     loadConversations()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const loadConversations = async () => {
@@ -115,7 +116,11 @@ Here's what I can do for you:
       if (!user) return
 
       const convs = await getConversations(user.id)
-      setConversations(convs)
+      setConversations(convs.map(c => ({
+        ...c,
+        title: c.title || 'New Conversation',
+        subject: c.subject || null
+      })))
     } catch (error) {
       // Error loading conversations - handled silently
     }
@@ -127,10 +132,9 @@ Here's what I can do for you:
       if (!user) return
 
       const newConv = await createConversation(user.id, 'New Conversation', selectedSubject)
-      if (newConv) {
-        setConversations(prev => [newConv, ...prev])
-        setCurrentConversationId(newConv.id)
-      }
+      if (!newConv) return
+      setConversations(prev => [{ ...newConv, title: newConv.title || 'New Conversation', subject: newConv.subject || null }, ...prev])
+      setCurrentConversationId(newConv.id)
       setMessages([
         {
           id: '1',
@@ -435,6 +439,7 @@ I'm your personal AI teacher, here to help you ace your **Junior Cycle** and **L
     } finally {
       setIsLoading(false)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [input, attachments, messages, selectedSubject, selectedLevel, selectedSystem, isLoading, currentConversationId, conversations, supabase])
 
   const handleQuickAction = (action: string) => {

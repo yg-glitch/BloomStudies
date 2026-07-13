@@ -62,7 +62,7 @@ export default function SettingsPage() {
       }
     }
     loadProfile()
-  }, [])
+  }, [supabase])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -78,7 +78,7 @@ export default function SettingsPage() {
         .catch(() => {})
         .finally(() => setIsLoadingInvoices(false))
     }
-  }, [activeTab, isPremium])
+  }, [activeTab, isPremium, billingHistory.length])
 
   const handleSaveProfile = async () => {
     setIsSavingProfile(true)

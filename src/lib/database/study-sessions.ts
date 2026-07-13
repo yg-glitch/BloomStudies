@@ -1,4 +1,4 @@
-import { createUniversalClient as createClient } from '@/lib/supabase/universal'
+import { createClient } from '@/lib/supabase/client'
 
 export type StudySession = {
   id: string
@@ -12,7 +12,7 @@ export type StudySession = {
 }
 
 export async function getStudySessions(userId: string, startDate?: Date, endDate?: Date): Promise<StudySession[]> {
-  const supabase = await createClient()
+  const supabase = createClient()
   let query = supabase
     .from('study_sessions')
     .select('*')
@@ -28,7 +28,7 @@ export async function getStudySessions(userId: string, startDate?: Date, endDate
 }
 
 export async function createStudySession(userId: string, session: Omit<StudySession, 'id' | 'user_id' | 'created_at'>): Promise<StudySession | null> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('study_sessions')
     .insert({ user_id: userId, ...session })
@@ -40,7 +40,7 @@ export async function createStudySession(userId: string, session: Omit<StudySess
 }
 
 export async function updateStudySession(sessionId: string, updates: Partial<StudySession>): Promise<StudySession | null> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('study_sessions')
     .update(updates)
@@ -53,7 +53,7 @@ export async function updateStudySession(sessionId: string, updates: Partial<Stu
 }
 
 export async function deleteStudySession(sessionId: string): Promise<boolean> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { error } = await supabase
     .from('study_sessions')
     .delete()

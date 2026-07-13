@@ -72,6 +72,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       } catch { /* non-blocking */ }
     }
     syncPlan()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Reset daily/monthly counters
@@ -84,6 +85,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       if (u.lastMonthResetDate !== thisMonth) updated = { ...updated, gradingsThisMonth: 0, notesThisMonth: 0, audioLessonsCreated: 0, lastMonthResetDate: thisMonth }
       return updated
     })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Generate referral code

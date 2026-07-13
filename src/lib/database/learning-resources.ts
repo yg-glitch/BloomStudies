@@ -1,4 +1,4 @@
-import { createUniversalClient as createClient } from '@/lib/supabase/universal'
+import { createClient } from '@/lib/supabase/client'
 
 export type LearningResource = {
   id: string
@@ -31,7 +31,7 @@ export async function getLearningResources(filters?: {
   level?: string
   search?: string
 }): Promise<LearningResource[]> {
-  const supabase = await createClient()
+  const supabase = createClient()
   let query = supabase
     .from('learning_resources')
     .select('*')
@@ -60,7 +60,7 @@ export async function getLearningResources(filters?: {
 }
 
 export async function getLearningResource(id: string): Promise<LearningResource | null> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('learning_resources')
     .select('*')
@@ -72,7 +72,7 @@ export async function getLearningResource(id: string): Promise<LearningResource 
 }
 
 export async function createLearningResource(resource: Omit<LearningResource, 'id' | 'views' | 'likes' | 'rating' | 'created_at' | 'updated_at'>): Promise<LearningResource | null> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('learning_resources')
     .insert({
@@ -89,7 +89,7 @@ export async function createLearningResource(resource: Omit<LearningResource, 'i
 }
 
 export async function updateLearningResource(id: string, updates: Partial<LearningResource>): Promise<LearningResource | null> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('learning_resources')
     .update(updates)
@@ -102,7 +102,7 @@ export async function updateLearningResource(id: string, updates: Partial<Learni
 }
 
 export async function deleteLearningResource(id: string): Promise<boolean> {
-  const supabase = await createClient()
+  const supabase = createClient()
   const { error } = await supabase
     .from('learning_resources')
     .delete()
@@ -112,7 +112,7 @@ export async function deleteLearningResource(id: string): Promise<boolean> {
 }
 
 export async function incrementResourceViews(id: string): Promise<void> {
-  const supabase = await createClient()
+  const supabase = createClient()
   await supabase.rpc('increment_views', { resource_id: id })
 }
 
